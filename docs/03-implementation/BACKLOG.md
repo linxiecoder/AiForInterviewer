@@ -75,7 +75,7 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-REL-008 | F8 | M8 | MUST | Feedback rollback and degradation gate plan | 规划 feedback-loop 重构的开关、降级、数据兼容、迁移、恢复和发布门槛；不声明 release-ready | rollback/degradation gate TODO、发布门槛清单 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003；AIFI-BE-009；AIFI-FE-002 | NOT_STARTED |
 | AIFI-QA-004 | F7 | M7 | MUST | Feedback acceptance semantics tests | 基于 `.omo/plans/plan.md` Step 1 建立 AC-001、AC-002、AC-003、AC-012 首批 feedback 验收语义测试护栏；当前收口为 `ACCEPTED_RED`，RED 作为后续实现缺口证据 | `tests/api/test_polish_feedback_acceptance_semantics.py` 等 pytest 覆盖和语义矩阵证据 | AIFI-PROD-011；AIFI-TRACE-001；当轮 scope lock | ACCEPTED_RED |
 | AIFI-BE-010 | F5 | M5 | MUST | Effective feedback state and compatibility | 实现有效 feedback 状态、旧 payload 兼容投影和 API/schema 兼容读取；AIFI-BE-009 仅作为参考上下文，不再作为硬依赖，AIFI-BE-009=NOT_STARTED 不阻塞本任务启动；Step2-A 必须在本任务内完成材料补齐、代码事实探查和 scope lock | 后端状态契约、兼容投影、相关 tests/api | AIFI-QA-004；AIFI-BE-009（参考上下文，非硬依赖） | READY_TO_START |
-| AIFI-BE-011 | F5 | M5 | MUST | Fail-closed feedback validation | 实现 feedback 生成失败时的 fail-closed 校验、投影和错误折叠 | validation/projection/service 行为和失败路径 tests/api | AIFI-BE-010 | NOT_STARTED |
+| AIFI-BE-011 | F5 | M5 | MUST | Fail-closed feedback validation | 实现 feedback 生成失败时的 fail-closed 校验、投影和错误折叠 | validation/projection/service 行为和失败路径 tests/api | AIFI-BE-010 | READY_TO_START |
 | AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和改进趋势归一化 | scoring/runtime 稳定性行为和回归 tests/api | AIFI-BE-010；AIFI-BE-011 | NOT_STARTED |
 | AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 实现 progress mastery、手动完成和有效反馈状态一致性 | progress/use cases 一致性行为和 tests/api | AIFI-BE-010；AIFI-BE-012 | NOT_STARTED |
 | AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 实现追问、下一题、progress 绑定和相似度拦截语义 | question generation/progress binding 行为和 tests/api | AIFI-BE-013 | NOT_STARTED |
@@ -225,13 +225,13 @@ Downstream handling：
 ### AIFI-BE-011 Fail-closed feedback validation
 
 - 背景：`.omo/plans/plan.md` Step 3 要求 feedback 生成失败、校验失败或 payload 不完整时必须 fail-closed，避免把无效反馈当作可完成、可掌握或可追问依据。
-- 范围：实现 feedback generation service、feedback validation、feedback projection 和 application service 中的失败闭合行为；把 invalid / failed / pending 的投影和错误语义写入 tests/api。
-- 非目标：不改 UI 呈现；不新增错误枚举的最终产品决策；不新增迁移；不改变 LLM provider；不吞掉已有异常可观测性。
-- 允许修改路径：`apps/api/app/application/polish/feedback_generation_service.py`；`apps/api/app/application/polish/feedback_validation.py`；`apps/api/app/application/polish/feedback_projection.py`；`apps/api/app/application/polish/feedback_application_service.py`；相关 `tests/api/test_polish_feedback*_failure*.py`、`tests/api/test_polish_feedback_validation*.py`、`tests/api/test_polish_api.py`。
+- 范围：仅授权 `.omo/plans/plan.md` Step 3：BE 反馈生成 fail-closed 与 payload validator。实现 feedback generation service、feedback validation、feedback projection、feedback models 和 application service 中的 payload validation、invalid / malformed / inconsistent feedback fail-closed、safe failure payload、retryable terminal failure，以及 session detail 不把失败 payload 当作 generated feedback 的行为；把 invalid / failed / pending 的投影和错误语义写入 tests/api。
+- 非目标：不授权 Step 4 same-answer stability、Step 5 improvement trend、Step 6 progress mastery、Step 7 question generation、FE、migration、release；不改 UI 呈现；不新增错误枚举的最终产品决策；不改变 LLM provider；不吞掉已有异常可观测性。
+- 允许修改路径：`apps/api/app/application/polish/feedback_application_service.py`；`apps/api/app/application/polish/feedback_generation_service.py`；`apps/api/app/application/polish/feedback_validation.py`；`apps/api/app/application/polish/feedback_projection.py`；`apps/api/app/application/polish/feedback_models.py`；`tests/api/test_polish_feedback_failure_contract.py`；`tests/api/test_polish_feedback_runtime.py`；必要的 `tests/api/test_polish_*feedback*.py` 中限定 Step 3 fail-closed / payload validator 的测试。
 - 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
 - 依赖：AIFI-BE-010；AIFI-QA-004。
-- 验收标准：无效 feedback payload 不会产生 mastered/progress completion；失败状态有稳定投影；旧兼容字段不被破坏；失败路径测试覆盖 validation、generation runtime 和 API 输出；日志或错误对象不暴露敏感 prompt。
-- 对应 plan.md Step：Step 3；Step 8 中失败 envelope 和 schema 兼容。
+- 验收标准：无效 feedback payload 不会产生 mastered/progress completion；失败状态有稳定投影；safe failure payload 不暴露 raw prompt / raw completion / provider payload；retryable terminal failure 可被 API/session detail 安全读取；session detail 不把失败 payload 当作 generated feedback；旧兼容字段不被破坏；失败路径测试覆盖 validation、generation runtime 和 API 输出；日志或错误对象不暴露敏感 prompt。
+- 对应 plan.md Step：Step 3：BE 反馈生成 fail-closed 与 payload validator；Step 8 中失败 envelope 和 schema 兼容。
 - 对应 PRD AC / FR / BR：AC-012、AC-013、AC-015；FR-005、FR-058 到 FR-064；BR-009、BR-010、BR-021、BR-023。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只固化 fail-closed 行为，不把 C-052 的最终错误枚举或 C-053 的刷新恢复状态机改为已决策。
 

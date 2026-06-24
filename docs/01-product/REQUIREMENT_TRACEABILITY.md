@@ -195,7 +195,7 @@ permalink: ai-for-interviewer/docs/01-product/requirement-traceability
 |---|---|---|
 | Step 1 | AIFI-QA-004 | 只允许写 feedback acceptance semantics tests；C-049 到 C-054 只写 Deferred guard |
 | Step 2、Step 5、Step 8 | AIFI-BE-010 | 当前下一步只允许重新执行 Step2 scope lock，并在 AIFI-BE-010 内完成 Step2-A 材料补齐、代码事实探查和 scope lock；本入口只授权 effective feedback state、feedback history、failure record exclusion、old payload compatibility、read-time projection 和相关 tests/api；AIFI-BE-009 仅作参考上下文，AIFI-BE-009=NOT_STARTED 不再硬阻塞 AIFI-BE-010；不允许 migration、FE、release、Step3 fail-closed validation、Step4 same-answer stability、Step5 improvement trend、Step6 progress mastery 或 Step7 question generation |
-| Step 3、Step 8 | AIFI-BE-011 | 只允许 fail-closed validation、generation failure projection 和相关 tests/api |
+| Step 3、Step 8 | AIFI-BE-011 | 只允许 Step 3：BE 反馈生成 fail-closed 与 payload validator，包括 payload validation、invalid / malformed / inconsistent feedback fail-closed、safe failure payload、retryable terminal failure、session detail 不把失败 payload 当作 generated feedback，以及 Step 8 中失败 envelope / schema 兼容的相关 tests/api；不授权 Step 4 same-answer stability、Step 5 improvement trend、Step 6 progress mastery、Step 7 question generation、FE、migration 或 release |
 | Step 4、Step 5 | AIFI-BE-012 | 只允许 same-answer stability、reference-answer replay、scoring normalization 和相关 tests/api |
 | Step 6 | AIFI-BE-013 | 只允许 progress mastery、manual completion consistency 和相关 tests/api |
 | Step 7、Step 8 | AIFI-BE-014 | 只允许 follow-up、next-question、progress binding、similarity interception 护栏和相关 tests/api；不关闭 C-049 / C-054 |
