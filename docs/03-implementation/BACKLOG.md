@@ -66,13 +66,22 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-REL-005 | F8 | M8 | MUST | 完成 security / privacy 发布验证 | 验证 owner boundary、session / cookie / token、secret handling、log redaction、provider payload、system prompt、completion 原文、copy boundary、third-party privacy、retention / deletion、backup restore、rate limit、provider failure、audit event、trace 和 source availability；不保存 provider payload / completion 原文，不暴露 hidden scoring rules | security / privacy release verification | AIFI-SEC-001；AIFI-REL-001；F7 全链路通过 | NOT_STARTED |
 | AIFI-REL-006 | F8 | M8 | LATER | 梳理下一轮 advanced features | 承接不阻断 MVP 的 advanced / deferred 项：真实招聘结果校准、复杂动态权重学习、provider-specific tuning、可选 queue / worker 独立化、vector database / embedding model selection、full observability platform、full SIEM / log platform、enterprise SSO / OAuth、organization / team ACL、internet search governance、advanced backup restore automation、advanced semantic dedup / merge algorithm | next iteration backlog candidates 或 accepted risk 清单 | AIFI-REL-001 | NOT_STARTED |
 | AIFI-REL-007 | F8 | M8 | LATER | 评估 advanced release automation | 在人工 release checklist、changelog、runbook、rollback strategy 和 retrospective 流程稳定后，再评估自动生成、自动核对或自动归档能力；不阻断 MVP 发布 | release automation proposal 或 accepted risk 说明 | AIFI-REL-001 | NOT_STARTED |
-| AIFI-PROD-011 | F1 | M1 | MUST | BMAD feedback PRD active docs intake | 将 BMAD feedback-loop PRD 作为需求来源登记到 active PRD、需求追踪和相关设计文档；不改产品代码 | active docs 来源回写、Non-goals、Open Questions、追踪入口 | BMAD PRD；Lazycodex plan；AIFI-TRACE-001 | NOT_STARTED |
-| AIFI-TRACE-001 | F1 | M1 | MUST | BMAD C-ID traceability registration | 登记 C-001 到 C-054 的来源状态、active doc 去向、BACKLOG 承接和关闭条件；不把 Deferred 项改成已实现 | `REQUIREMENT_TRACEABILITY.md` C-ID 追踪矩阵 | BMAD PRD；Lazycodex plan；AIFI-PROD-011 | NOT_STARTED |
+| AIFI-PROD-011 | F1 | M1 | MUST | BMAD feedback PRD active docs intake | 已将 BMAD feedback-loop PRD 作为需求来源登记到 active PRD、需求追踪和相关设计文档；不改产品代码 | active docs 来源回写、Non-goals、Open Questions、追踪入口 | BMAD PRD；Lazycodex plan | DONE |
+| AIFI-TRACE-001 | F1 | M1 | MUST | BMAD C-ID traceability registration | 已完成 BMAD C-ID 单项追踪登记，包含来源状态、active doc 去向、BACKLOG 承接和关闭条件；Rejected / Deferred 边界保持，不把 Deferred 项改成已实现 | `REQUIREMENT_TRACEABILITY.md` C-ID 追踪矩阵 | BMAD PRD；Lazycodex plan；AIFI-PROD-011 | DONE |
 | AIFI-ARCH-009 | F4 | M4 | MUST | Feedback stability architecture gap analysis | 规划级分析 feedback 稳定性、API、data、prompt、scoring、state 和 release 差距；不形成代码级实现方案 | active design docs 差距清单、ADR 是否需要的判断 | AIFI-PROD-011；AIFI-TRACE-001 | NOT_STARTED |
 | AIFI-QA-003 | F7 | M7 | MUST | Feedback acceptance semantics matrix | 硬化“基本一致、评分趋势应上升、大量失分点、用户补足失分点、自动验收 vs 人工验收”的验收语义；不定义未确认阈值 | QA 语义矩阵、人工抽样边界、待确认阈值清单 | AIFI-PROD-011；AIFI-ARCH-009 | NOT_STARTED |
 | AIFI-BE-009 | F5 | M5 | MUST | Feedback state and compatibility survey | 只做后端状态、旧反馈、旧题目状态、task 状态、payload projection、数据读写和迁移风险探查；不修改后端代码 | 兼容性矩阵、数据风险清单、迁移/回滚待确认项 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003 | NOT_STARTED |
 | AIFI-FE-002 | F6 | M6 | SHOULD | Feedback display and refresh recovery survey | 只做前端反馈展示、失败折叠、刷新恢复、状态提示去重和验收证据展示缺口探查；不修改页面代码 | UX/FE 展示差距清单、刷新恢复验收建议 | AIFI-PROD-011；AIFI-QA-003 | NOT_STARTED |
 | AIFI-REL-008 | F8 | M8 | MUST | Feedback rollback and degradation gate plan | 规划 feedback-loop 重构的开关、降级、数据兼容、迁移、恢复和发布门槛；不声明 release-ready | rollback/degradation gate TODO、发布门槛清单 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003；AIFI-BE-009；AIFI-FE-002 | NOT_STARTED |
+| AIFI-QA-004 | F7 | M7 | MUST | Feedback acceptance semantics tests | 基于 `.omo/plans/plan.md` Step 1 补齐 feedback 验收语义测试入口 | `tests/api/test_polish_feedback_acceptance_semantics.py` 等 pytest 覆盖和语义矩阵证据 | AIFI-PROD-011；AIFI-TRACE-001；AIFI-QA-003 | READY_TO_START |
+| AIFI-BE-010 | F5 | M5 | MUST | Effective feedback state and compatibility | 实现有效 feedback 状态、旧 payload 兼容投影和 API/schema 兼容读取 | 后端状态契约、兼容投影、相关 tests/api | AIFI-QA-004；AIFI-BE-009 | NOT_STARTED |
+| AIFI-BE-011 | F5 | M5 | MUST | Fail-closed feedback validation | 实现 feedback 生成失败时的 fail-closed 校验、投影和错误折叠 | validation/projection/service 行为和失败路径 tests/api | AIFI-BE-010 | NOT_STARTED |
+| AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和改进趋势归一化 | scoring/runtime 稳定性行为和回归 tests/api | AIFI-BE-010；AIFI-BE-011 | NOT_STARTED |
+| AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 实现 progress mastery、手动完成和有效反馈状态一致性 | progress/use cases 一致性行为和 tests/api | AIFI-BE-010；AIFI-BE-012 | NOT_STARTED |
+| AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 实现追问、下一题、progress 绑定和相似度拦截语义 | question generation/progress binding 行为和 tests/api | AIFI-BE-013 | NOT_STARTED |
+| AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model、失败折叠和旧 payload 容错 | `entities/polish` view model/types/API 适配和 FE tests | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002 | NOT_STARTED |
+| AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
+| AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
 
 ## 2. BMAD feedback-loop planning intake task details
 
@@ -85,8 +94,9 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 - 非目标：不修改产品代码、不生成接口/数据/Prompt/页面实现方案、不关闭 C-049 到 C-054。
 - PRD 来源：`_bmad-output/planning-artifacts/PRD.md`、`_bmad-output/planning-artifacts/briefs/brief-AiForInterviewer-2026-06-23/brief-traceability.md`；工程规划来源：`.omo/plans/bmad-feedback-loop-refactor-planning.md`。
 - 验收标准：active docs 明确 BMAD PRD 是需求来源、Lazycodex plan 是工程规划来源；C-049 到 C-054 保持 Deferred / Open Question；BR-024 仅登记为产品排序规则，不登记为算法实现；没有产品代码 diff。
-- 依赖：BMAD PRD、Lazycodex plan、AIFI-TRACE-001。
-- 是否阻塞后续实现：是。未完成前不得进入 `$start-work` 或代码实现。
+- 完成证据：Todo 1-3 证据确认 PRD、需求追踪和计划列出的相关设计文档已完成 active-docs intake；本任务关闭不关闭 AIFI-TRACE-001。
+- 依赖：BMAD PRD、Lazycodex plan。
+- 是否阻塞后续实现：否。active-docs intake 已完成；后续实现仍受 AIFI-TRACE-001、AIFI-ARCH-009、AIFI-QA-003 等独立任务和当轮 scope lock 约束。
 
 ### AIFI-TRACE-001 BMAD C-ID traceability registration
 
@@ -95,8 +105,10 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 - 非目标：不把 BMAD C-ID 标为已实现，不把 Deferred 项改写成 MERGED / ACCEPTED，不从 brief 或 addendum 替代 PRD §13.2 / traceability 主证据。
 - PRD 来源：`_bmad-output/planning-artifacts/PRD.md` §13.2、`brief-traceability.md`；工程规划来源：`.omo/plans/bmad-feedback-loop-refactor-planning.md`。
 - 验收标准：`REQUIREMENT_TRACEABILITY.md` 可追踪 C-001 到 C-054；Rejected / Deferred 项不会出现在可开工实现范围；C-048 / BR-024 不关闭 C-054。
+- 完成证据：Todo 2 证据确认 `REQUIREMENT_TRACEABILITY.md` 已建立 `### 5.1 C-001 到 C-054 单项追踪矩阵`，`matrix_block=present`、`rows=54`、`missing=`、`duplicate=`、`unexpected=` 且 `forbidden_matches=0`。
+- 边界：Rejected / Deferred 边界保持；C-049 到 C-054 仍为 Deferred / Open Question，不进入 implementation start scope；C-048 / BR-024 只关闭产品排序规则，不关闭 C-054 的具体算法。
 - 依赖：AIFI-PROD-011。
-- 是否阻塞后续实现：是。未登记前不得按 BMAD PRD 启动实现。
+- 是否阻塞后续实现：否。C-ID 追踪登记已完成；后续实现仍受 AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002、AIFI-REL-008 等独立任务和当轮 scope lock 约束。
 
 ### AIFI-ARCH-009 Feedback stability architecture gap analysis
 
@@ -147,6 +159,123 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 - 验收标准：发布门槛 TODO 覆盖开关设计、数据兼容、迁移策略、恢复策略和发布门槛；明确未通过前禁止进入 `$start-work`。
 - 依赖：AIFI-PROD-011、AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002。
 - 是否阻塞后续实现：是。未完成前不得进入可发布或灰度执行判断。
+
+### AIFI-QA-004 Feedback acceptance semantics tests
+
+- 背景：`.omo/plans/plan.md` Step 1 要求先把 feedback 验收语义落成可运行测试，避免后续后端/前端实现各自解释“有效反馈”“失败折叠”“追问/下一题”语义。
+- 范围：新增或更新 feedback acceptance semantics pytest，覆盖 AC-001 到 AC-015 的关键断言、Step 1 的 task acceptance、C-049 到 C-054 Deferred guard，以及后续 Step 2 到 Step 12 的回归入口。
+- 非目标：不实现后端业务逻辑、不修改前端、不创建迁移、不改变 API schema、不关闭 C-049 到 C-054。
+- 允许修改路径：`tests/api/test_polish_feedback_acceptance_semantics.py`；必要时可补充同目录下命名清晰的 `tests/api/test_polish_feedback_*acceptance*.py` 测试文件。
+- 禁止修改路径：`apps/**`；`apps/api/migrations/**`；`apps/web/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-PROD-011；AIFI-TRACE-001；AIFI-QA-003；当前 BACKLOG 授权入口；当轮 scope lock 明确允许写 `tests/api/**`。
+- 验收标准：`tests/api/test_polish_feedback_acceptance_semantics.py` 能被单独运行；测试名称或断言注释可追踪到 AC-001 到 AC-015；测试显式断言 C-049 到 C-054 仍为 Deferred / Open Question；失败断言先红后绿，不通过 mock 直接绕过业务契约。
+- 对应 plan.md Step：Step 1。
+- 对应 PRD AC / FR / BR：AC-001 到 AC-015；FR-001 到 FR-064 中与 feedback-loop 相关的验收语义；BR-001 到 BR-024；active PRD 第 12 节登记的 BMAD feedback-loop PRD 作为需求来源，不作为独立执行入口。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只把 Deferred guard 写入测试，不把相似度阈值、持久化表、UI 形态、错误枚举、刷新恢复状态机或下一题算法升级为已决策。
+
+### AIFI-BE-010 Effective feedback state and compatibility
+
+- 背景：`.omo/plans/plan.md` Step 2 和 Step 5 要求后端有单一 effective feedback state，并能兼容旧 feedback payload、pending/failed 状态和只读投影，防止旧数据在 API 与 progress 之间表现不一致。
+- 范围：实现或调整 feedback 状态选择、兼容投影、schema 字段、repository 读取映射和相关 API/use case 输出；优先采用 read-time projection，不引入迁移。
+- 非目标：不新增数据库迁移；不改前端；不改变题目生成算法；不实现 fail-closed 细节；不声明 release-ready。
+- 允许修改路径：`apps/api/app/application/polish/**`；`apps/api/app/schemas/polish.py`；`apps/api/app/infrastructure/db/repositories/polish.py`；相关 `tests/api/test_polish_feedback*_compatibility*.py`、`tests/api/test_polish_effective_feedback_state.py`、`tests/api/test_polish_api.py` 中限定 feedback state/compatibility 的测试。
+- 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-QA-004；AIFI-BE-009；当轮 scope lock 明确允许写后端 polish application/schema/repository 和相关 tests/api。
+- 验收标准：旧 payload、无 feedback payload、pending/failed/succeeded 状态都有稳定投影；API 返回不破坏既有字段；effective feedback selector 只选当前有效反馈；相关兼容测试通过；未引入迁移。
+- 对应 plan.md Step：Step 2；Step 5 中 current effective feedback selector；Step 8 中与 feedback state/schema 兼容有关的 API envelope。
+- 对应 PRD AC / FR / BR：AC-004、AC-005、AC-006、AC-012、AC-013；FR-006 到 FR-011、FR-024、FR-026、FR-027、FR-039 到 FR-047、FR-058 到 FR-061；BR-009、BR-010、BR-016 到 BR-023。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务可实现兼容状态字段和投影，但不关闭 C-050、C-052、C-053，也不决定 C-049、C-051、C-054。
+
+### AIFI-BE-011 Fail-closed feedback validation
+
+- 背景：`.omo/plans/plan.md` Step 3 要求 feedback 生成失败、校验失败或 payload 不完整时必须 fail-closed，避免把无效反馈当作可完成、可掌握或可追问依据。
+- 范围：实现 feedback generation service、feedback validation、feedback projection 和 application service 中的失败闭合行为；把 invalid / failed / pending 的投影和错误语义写入 tests/api。
+- 非目标：不改 UI 呈现；不新增错误枚举的最终产品决策；不新增迁移；不改变 LLM provider；不吞掉已有异常可观测性。
+- 允许修改路径：`apps/api/app/application/polish/feedback_generation_service.py`；`apps/api/app/application/polish/feedback_validation.py`；`apps/api/app/application/polish/feedback_projection.py`；`apps/api/app/application/polish/feedback_application_service.py`；相关 `tests/api/test_polish_feedback*_failure*.py`、`tests/api/test_polish_feedback_validation*.py`、`tests/api/test_polish_api.py`。
+- 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-BE-010；AIFI-QA-004。
+- 验收标准：无效 feedback payload 不会产生 mastered/progress completion；失败状态有稳定投影；旧兼容字段不被破坏；失败路径测试覆盖 validation、generation runtime 和 API 输出；日志或错误对象不暴露敏感 prompt。
+- 对应 plan.md Step：Step 3；Step 8 中失败 envelope 和 schema 兼容。
+- 对应 PRD AC / FR / BR：AC-012、AC-013、AC-015；FR-005、FR-058 到 FR-064；BR-009、BR-010、BR-021、BR-023。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只固化 fail-closed 行为，不把 C-052 的最终错误枚举或 C-053 的刷新恢复状态机改为已决策。
+
+### AIFI-BE-012 Same-answer stability and reference-answer replay
+
+- 背景：`.omo/plans/plan.md` Step 4 和 Step 5 要求同一答案重复生成 feedback 时评分、参考答案 replay 和 improvement trend 不漂移，避免用户看到同题同答结果不一致。
+- 范围：实现或修正 feedback runtime、scoring normalization、reference answer replay、same-answer stability 和 improvement trend 计算；补充稳定性回归 tests/api。
+- 非目标：不改前端 UI；不更换 LLM provider；不把评分算法扩展到未登记业务域；不新增迁移。
+- 允许修改路径：`apps/api/app/application/polish/**` 中 feedback runtime、scoring normalization、reference answer replay 相关文件；相关 `tests/api/test_polish_feedback_stability.py`、`tests/api/test_polish_feedback_generation_service.py`、`tests/api/test_polish_feedback_runtime.py`。
+- 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-QA-004。
+- 验收标准：同答案重复执行时评分归一化稳定；reference answer replay 不丢失；improvement trend 使用有效 feedback 序列；相关 tests/api 覆盖 repeat answer、old payload、invalid payload 和 fake LLM fixture。
+- 对应 plan.md Step：Step 4；Step 5 中 improvement trend 计算。
+- 对应 PRD AC / FR / BR：AC-001、AC-002、AC-003、AC-004、AC-005；FR-012 到 FR-018、FR-024、FR-039 到 FR-047；BR-007、BR-008、BR-016 到 BR-020。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务不决定相似度阈值、UI 形态、刷新恢复或下一题算法；仅确保已授权 feedback runtime 的稳定性。
+
+### AIFI-BE-013 Progress mastery and manual completion consistency
+
+- 背景：`.omo/plans/plan.md` Step 6 要求 progress mastery、manual completion 和有效 feedback 状态一致，避免无效 feedback 推动进度或手动完成覆盖真实状态。
+- 范围：实现或调整 progress 更新、polish use cases、manual completion 行为和有效 feedback selector 之间的一致性；补充相关 tests/api。
+- 非目标：不实现下一题算法；不改前端交互；不新增迁移；不关闭 C-053。
+- 允许修改路径：`apps/api/app/application/polish/**`；`apps/api/app/schemas/polish.py` 中 progress/manual completion 相关字段；相关 `tests/api/test_polish_progress*.py`、`tests/api/test_polish_api.py`。
+- 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-BE-010；AIFI-BE-012；AIFI-QA-004。
+- 验收标准：只有有效 feedback 能推动 mastery/progress；manual completion 与 feedback invalid/failed/pending 状态不冲突；repeat answer 和旧 payload 场景保持兼容；相关 tests/api 通过。
+- 对应 plan.md Step：Step 6。
+- 对应 PRD AC / FR / BR：AC-004 到 AC-008、AC-013；FR-024、FR-026 到 FR-031、FR-039 到 FR-047；BR-007、BR-016 到 BR-023。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务实现 progress 一致性，但不关闭 C-050、C-052、C-053，也不决定 C-049、C-051、C-054。
+
+### AIFI-BE-014 Follow-up and next-question behavior
+
+- 背景：`.omo/plans/plan.md` Step 7 要求追问、下一题、progress 绑定和相似度拦截按同一 feedback/progress 状态运行，避免相同错误被重复追问或下一题绕过 mastery。
+- 范围：实现或调整 question generation、follow-up、next-question、progress binding 和 similarity interception 相关后端行为；补充 tests/api。
+- 非目标：不最终确定 C-049 相似度阈值；不最终确定 C-054 下一题算法；不改前端 UI；不新增迁移。
+- 允许修改路径：`apps/api/app/application/polish/**` 中 question generation、progress binding、similarity interception 相关文件；`apps/api/app/api/v1/polish.py` 中与现有 polish API envelope 兼容的最小调整；相关 `tests/api/test_polish_question*.py`、`tests/api/test_polish_followup*.py`、`tests/api/test_polish_api.py`。
+- 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-BE-013；AIFI-BE-010；AIFI-QA-004。
+- 验收标准：follow-up 和 next-question 使用有效 feedback/progress；相似度拦截有保守默认和测试护栏；manual completion 后不会生成冲突追问；API envelope 与旧调用兼容；相关 tests/api 通过。
+- 对应 plan.md Step：Step 7；Step 8 中 follow-up / next-question envelope。
+- 对应 PRD AC / FR / BR：AC-009、AC-010、AC-011、AC-014；FR-019 到 FR-023、FR-032 到 FR-038、FR-048 到 FR-057；BR-011 到 BR-014、BR-024。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只建立保守行为和测试护栏，不把 C-049 阈值或 C-054 算法标记为最终决策。
+
+### AIFI-FE-003 Feedback view model and failure folding
+
+- 背景：`.omo/plans/plan.md` Step 9 要求前端先在 `entities/polish` 层把 feedback payload、有效状态、失败折叠和旧 payload 容错统一为 view model，再交给页面呈现。
+- 范围：实现或调整 polish entity types/API/view model/parser，使前端能处理 succeeded、pending、failed、invalid、legacy payload 和缺失字段；补充 FE tests。
+- 非目标：不改 `InterviewPage.tsx` 页面交互；不定义最终视觉样式；不改后端；不关闭 C-051 或 C-053。
+- 允许修改路径：`apps/web/src/entities/polish/**`；同目录或现有 FE 测试目录下的相关 `*.test.ts`、`*.test.tsx`。
+- 禁止修改路径：`apps/web/src/pages/interview/InterviewPage.tsx`；`apps/api/**`；`tests/api/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002；AIFI-QA-004。
+- 验收标准：view model 对旧 payload 和失败 payload 有稳定输出；缺失字段不导致渲染异常；错误折叠不会伪装为成功 feedback；相关 FE tests 或 typecheck 覆盖核心转换。
+- 对应 plan.md Step：Step 8 中前端 schema/type 适配；Step 9。
+- 对应 PRD AC / FR / BR：AC-012、AC-013、AC-015；FR-002 到 FR-005、FR-008 到 FR-010、FR-023 到 FR-031、FR-060 到 FR-064；BR-009、BR-010、BR-021、BR-023。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务不决定最终 UI 形态或刷新恢复状态机，只提供可兼容的数据视图模型。
+
+### AIFI-FE-004 Interview workbench interaction and refresh recovery
+
+- 背景：`.omo/plans/plan.md` Step 10 和 Step 11 要求面试页基于 view model 呈现 feedback、失败折叠、重试/刷新恢复和手动完成一致状态，并保留页面级 QA 证据。
+- 范围：实现或调整 `InterviewPage.tsx` 的 feedback 展示、重试、刷新恢复、manual completion 和 next-question/follow-up 交互；补充相关 FE tests 或页面 smoke 证据。
+- 非目标：不改 `entities/polish` contract 以外的后端；不创建新的设计系统；不最终关闭 C-051 或 C-053；不声明 release-ready。
+- 允许修改路径：`apps/web/src/pages/interview/InterviewPage.tsx`；同目录或现有 FE 测试目录下与 InterviewPage 相关的 `*.test.ts`、`*.test.tsx`；必要时仅修改页面邻近的测试 fixture。
+- 禁止修改路径：`apps/api/**`；`tests/api/**`；`apps/web/src/entities/polish/**` 中超出 AIFI-FE-003 contract 的改动；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004。
+- 验收标准：成功、pending、failed、invalid、legacy feedback 均有一致页面状态；刷新后不丢失有效 feedback；失败折叠不遮蔽可恢复动作；页面 smoke 或 FE tests 记录 Step 11 的关键路径。
+- 对应 plan.md Step：Step 10；Step 11 中页面集成与 smoke evidence。
+- 对应 PRD AC / FR / BR：AC-012、AC-013、AC-014、AC-015；FR-001、FR-019 到 FR-025、FR-027 到 FR-031、FR-052、FR-060、FR-061；BR-021 到 BR-023。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只实现页面行为和恢复护栏，不把 C-051 UI 形态或 C-053 刷新恢复状态机升格为最终产品决策。
+
+### AIFI-REL-009 Feedback-loop release gate and rollback checklist
+
+- 背景：`.omo/plans/plan.md` Step 12 要求在实现完成后有明确 release gate、rollback checklist、QA evidence 和未满足项，避免把部分通过的 feedback-loop 声明为可发布。
+- 范围：更新 release docs、runbook、QA evidence docs，记录 Step 1 到 Step 11 的测试命令、结果、回滚策略、降级策略和 release blocker。
+- 非目标：不改业务代码；不改测试代码；不创建新 roadmap 或并行计划入口；不把 `_bmad-output` 或 `.omo/plans` 变成 active docs。
+- 允许修改路径：`docs/03-implementation/**` 中 release checklist、runbook、QA evidence、test plan 类 active docs；必要时同步 `docs/00-governance/DOCS_INDEX.md` 中新增 active doc 登记。
+- 禁止修改路径：`apps/**`；`tests/**`；`apps/api/migrations/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008。
+- 验收标准：release gate 明确 PASS/FAIL 条件；rollback 和 degradation checklist 可执行；QA evidence 记录测试命令、结果和未覆盖风险；未完成项不会被写成 release-ready；如新增 active doc 已登记到 DOCS_INDEX。
+- 对应 plan.md Step：Step 11 中集成 evidence 汇总；Step 12。
+- 对应 PRD AC / FR / BR：AC-001 到 AC-015；NFR-001 到 NFR-008；BR-001 到 BR-024。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只登记 release gate 和回滚条件，不关闭任何 Deferred / Open Question；若后续要关闭，必须另走 active PRD / traceability / BACKLOG 决策入口。
 
 ## 3. 优先级定义
 
