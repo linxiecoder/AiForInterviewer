@@ -73,6 +73,11 @@ from app.application.polish.agents.question import (
 from app.application.polish.feedback_generation_service import (
     FeedbackGenerationService,
 )
+from app.application.polish.feedback_schema import (
+    POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+    POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+    POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+)
 from app.application.polish.feedback_projection import (
     feedback_text_from_payload,
     response_safe_feedback_payload,
@@ -3296,6 +3301,30 @@ def _to_session_answer_detail(
     raw_feedback_payload = _feedback_payload_from_summary(feedback.feedback_summary) if feedback is not None else None
     feedback_payload = response_safe_feedback_payload(raw_feedback_payload) if raw_feedback_payload is not None else None
     feedback_text = _feedback_text_from_summary(feedback.feedback_summary) if feedback is not None else None
+    if feedback_payload is None and feedback is not None and feedback_text is not None:
+        feedback_payload = response_safe_feedback_payload(
+            {
+                "schema_id": POLISH_FEEDBACK_FINAL_SCHEMA_ID,
+                "schema_version": POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
+                "contract_ids": list(POLISH_FEEDBACK_FINAL_CONTRACT_IDS),
+                "status": "generated",
+                "feedback_id": feedback.feedback_id,
+                "feedback_text": feedback_text,
+                "answer_summary": None,
+                "score_result": None,
+                "loss_points": [],
+                "reference_answer": None,
+                "next_recommended_actions": [],
+                "trace_refs": [],
+                "low_confidence_flags": [],
+                "feedback_metadata": {
+                    "legacy_feedback_summary": True,
+                    "answer_id": answer.answer_id,
+                    "session_id": answer.session_id,
+                    "question_id": answer.question_id,
+                },
+            }
+        )
     return PolishSessionAnswerDetail(
         answer_id=answer.answer_id,
         answer_round=answer.answer_round,
@@ -3313,12 +3342,14 @@ def _latest_feedback_by_answer_id(
     feedbacks: tuple[PolishFeedback, ...],
 ) -> dict[str, PolishFeedback]:
     """
-    Keep only the latest feedback for each answer_id, using:
+    Keep only the latest effective generated feedback for each answer_id, using:
     1) created_at
     2) feedback_id
     """
     latest_by_answer_id: dict[str, PolishFeedback] = {}
     for feedback in feedbacks:
+        if not _is_effective_feedback(feedback):
+            continue
         current = latest_by_answer_id.get(feedback.answer_id)
         if (
             current is None
@@ -3326,6 +3357,20 @@ def _latest_feedback_by_answer_id(
         ):
             latest_by_answer_id[feedback.answer_id] = feedback
     return latest_by_answer_id
+
+
+def _is_effective_feedback(feedback: PolishFeedback) -> bool:
+    if feedback.status != "generated":
+        return False
+
+    payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    if payload is None:
+        return bool(feedback.feedback_summary.strip())
+
+    payload_status = payload.get("status")
+    if payload_status is not None and payload_status != "generated":
+        return False
+    return feedback_text_from_payload(payload) is not None
 
 
 def _or_fallback_text(value: str | None, fallback: str) -> str:
