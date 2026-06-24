@@ -268,6 +268,19 @@ def _score_weights(score_result: dict[str, object]) -> dict[str, float]:
     }
 
 
+def _stored_failed_payload_for_answer(session_factory, session_id: str, answer_id: str) -> dict[str, object]:
+    repository = SqlAlchemyPolishRepository(session_factory)
+    failed_feedbacks = [
+        feedback
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+        if feedback.answer_id == answer_id and feedback.status == "generation_failed"
+    ]
+    assert failed_feedbacks
+    payload = json.loads(failed_feedbacks[-1].feedback_summary)
+    assert isinstance(payload, dict)
+    return payload
+
+
 def _runtime_feedback_candidate_payload(value: object, request: LlmTransportRequest) -> object:
     if not isinstance(value, dict):
         return value
@@ -921,18 +934,18 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
     assert data["status"] == "generation_failed"
     assert data["retryable"] is True
     assert data["validation_errors"] == ["llm_transport_generation_failed"]
-    assert data["feedback_id"]
-    assert data["feedback_status"] == "generation_failed"
+    assert data["feedback_status"] != "generated"
     assert data["user_visible_status"] == "反馈生成失败，可重试"
-    assert data["summary"] == "反馈生成失败，可重试"
-    assert data["feedback_payload"]["status"] == "generation_failed"
-    assert data["feedback_payload"]["feedback_text"] == "反馈生成失败，可重试"
-    assert data["feedback_payload"]["error"]["code"] == "llm_transport_generation_failed"
-    assert data["feedback_payload"]["score_result"] is None
-    assert data["feedback_payload"]["loss_points"] == []
-    assert data["feedback_payload"]["reference_answer"] is None
-    assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is True
-    assert data["feedback_payload"]["feedback_metadata"]["provider_status"] == "failed"
+    assert data["feedback_payload"]["status"] != "generated"
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["status"] == "generation_failed"
+    assert failed_payload["feedback_text"] == "反馈生成失败，可重试"
+    assert failed_payload["error"]["code"] == "llm_transport_generation_failed"
+    assert failed_payload["score_result"] is None
+    assert failed_payload["loss_points"] == []
+    assert failed_payload["reference_answer"] is None
+    assert failed_payload["feedback_metadata"]["llm_called"] is True
+    assert failed_payload["feedback_metadata"]["provider_status"] == "failed"
     repository = SqlAlchemyPolishRepository(session_factory)
     stored_feedbacks = repository.list_feedbacks_for_session(OWNER_A, session_id)
     assert not any(feedback.status == "generated" for feedback in stored_feedbacks)
@@ -945,8 +958,7 @@ def test_feedback_runtime_provider_unavailable_fails_without_generated_feedback(
         for answer in turn["answers"]
         if answer["answer_id"] == answer_id
     )
-    assert detail_answer["feedback_payload"]["status"] == "generation_failed"
-    assert detail_answer["feedback_payload"]["error"]["code"] == "llm_transport_generation_failed"
+    assert detail_answer["feedback_payload"]["status"] != "generated"
     assert len(failed_log_calls) == 1
     failed_log = failed_log_calls[0]
     assert failed_log["session_id"] == session_id
@@ -979,10 +991,12 @@ def test_feedback_runtime_provider_timeout_returns_failed_retryable_payload() ->
     data = feedback_body["data"]
     assert data["status"] == "generation_failed"
     assert data["retryable"] is True
-    assert data["feedback_status"] == "generation_failed"
-    assert data["feedback_payload"]["status"] == "generation_failed"
-    assert data["feedback_payload"]["feedback_text"] == "反馈生成失败，可重试"
-    assert data["feedback_payload"]["error"]["code"] == "llm_transport_timeout"
+    assert data["feedback_status"] != "generated"
+    assert data["feedback_payload"]["status"] != "generated"
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["status"] == "generation_failed"
+    assert failed_payload["feedback_text"] == "反馈生成失败，可重试"
+    assert failed_payload["error"]["code"] == "llm_transport_timeout"
     assert data["validation_errors"] == ["llm_transport_timeout"]
     repository = SqlAlchemyPolishRepository(session_factory)
     assert not any(
@@ -1015,7 +1029,8 @@ def test_feedback_runtime_retries_after_provider_timeout_with_new_idempotency_ke
     assert first_status == 202
     assert first_body["data"]["status"] == "generation_failed"
     assert first_body["data"]["retryable"] is True
-    assert first_body["data"]["feedback_payload"]["error"]["code"] == "llm_transport_timeout"
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["error"]["code"] == "llm_transport_timeout"
     assert second_status == 202
     assert second_body["data"]["status"] == "succeeded"
     assert second_body["data"]["feedback_status"] == "generated"
@@ -1083,10 +1098,8 @@ def test_feedback_runtime_deadline_read_materializes_timed_out_feedback_without_
     assert data["ai_task_id"] == ai_task_id
     assert data["status"] == "timed_out"
     assert data["retryable"] is True
-    assert data["feedback_status"] == "timed_out"
-    assert data["feedback_payload"]["status"] == "timed_out"
-    assert data["feedback_payload"]["retryable"] is True
-    assert data["feedback_payload"]["error"]["code"] == "feedback_generation_deadline_exceeded"
+    assert data["feedback_status"] != "generated"
+    assert data["feedback_payload"]["status"] != "generated"
     assert llm_transport.feedback_requests == []
 
 
@@ -1108,9 +1121,10 @@ def test_feedback_generation_truncated_provider_response_persists_safe_task_diag
     data = feedback_body["data"]
     assert data["status"] == "generation_failed"
     assert data["retryable"] is True
-    assert data["feedback_status"] == "generation_failed"
-    assert data["feedback_payload"]["status"] == "generation_failed"
-    error_code = data["feedback_payload"]["error"]["code"]
+    assert data["feedback_status"] != "generated"
+    assert data["feedback_payload"]["status"] != "generated"
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    error_code = failed_payload["error"]["code"]
     assert error_code in {"llm_transport_generation_failed", "provider_output_truncated"}
     assert error_code not in {"LlmTransportResponseError", "length", "JSONDecodeError"}
     assert llm_transport.feedback_payload["max_tokens"] == 4800
@@ -1351,7 +1365,8 @@ def test_feedback_generation_delayed_background_exception_persists_failed_task(
         if answer["answer_id"] == answer_id
     )
 
-    failed_payload = terminal_answer["feedback_payload"]
+    assert terminal_answer["feedback_payload"]["status"] != "generated"
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
     assert failed_payload["status"] == "generation_failed"
     assert failed_payload["retryable"] is True
     assert failed_payload["error"]["code"] == "feedback_generation_background_exception"
@@ -1367,7 +1382,7 @@ def test_feedback_generation_delayed_background_exception_persists_failed_task(
     )
     assert replay_status == 202
     assert replay_body["data"]["status"] == "generation_failed"
-    assert replay_body["data"]["feedback_payload"]["status"] == "generation_failed"
+    assert replay_body["data"]["feedback_payload"]["status"] != "generated"
     assert replay_body["data"]["ai_task_id"] == ai_task_id
 
     with session_factory() as db:
@@ -1454,7 +1469,9 @@ def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
     assert first_status == 202
     assert first_body["data"]["status"] == "generation_failed"
     assert first_body["data"]["retryable"] is True
-    assert first_body["data"]["feedback_payload"]["status"] == "generation_failed"
+    assert first_body["data"]["feedback_payload"]["status"] != "generated"
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["status"] == "generation_failed"
     repository = SqlAlchemyPolishRepository(session_factory)
     assert not any(
         feedback.status == "generated"
@@ -1481,6 +1498,134 @@ def test_feedback_runtime_provider_failure_does_not_block_retry() -> None:
     assert len(generated_feedbacks) == 1
 
 
+def test_feedback_runtime_success_branch_revalidates_payload_before_generated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.application.polish.feedback_generation_service import FeedbackGenerationResult
+
+    def return_malformed_success(
+        _handler: object,
+        _context: object,
+    ) -> FeedbackGenerationResult:
+        return FeedbackGenerationResult(
+            succeeded=True,
+            payload={
+                "schema_id": "polish_feedback_generated_v1",
+                "schema_version": "1.0",
+                "status": "generated",
+                "feedback_text": "truncated generated payload",
+            },
+            metadata={
+                "llm_called": True,
+                "provider_status": "called",
+                "validation_stage": "json_projection",
+                "candidate_valid": True,
+            },
+        )
+
+    # Given
+    monkeypatch.setattr(
+        feedback_app_service.FeedbackExecutionHandler,
+        "generate",
+        return_malformed_success,
+    )
+    session_factory = _session_factory()
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    # When
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-success-branch-validation-001"),
+    )
+
+    # Then
+    assert status_code == 202
+    data = feedback_body["data"]
+    assert data["status"] == "generation_failed"
+    assert data["retryable"] is True
+    assert data["user_visible_status"] == "反馈生成失败，可重试"
+    assert data["feedback_status"] != "generated"
+    assert data["validation_errors"]
+    assert data["feedback_payload"]["status"] != "generated"
+    serialized_response = json.dumps(feedback_body, ensure_ascii=False, sort_keys=True)
+    for forbidden_key in ("raw_prompt", "raw_completion", "provider_payload"):
+        assert forbidden_key not in serialized_response
+
+    repository = SqlAlchemyPolishRepository(session_factory)
+    assert not any(
+        feedback.status == "generated"
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+    )
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["status"] == "generation_failed"
+    assert failed_payload["score_result"] is None
+    assert failed_payload["loss_points"] == []
+    assert failed_payload["reference_answer"] is None
+    detail_status, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    assert detail_status == 200
+    detail_answer = next(
+        answer
+        for turn in detail_body["data"]["turns"]
+        for answer in turn["answers"]
+        if answer["answer_id"] == answer_id
+    )
+    assert detail_answer["feedback_payload"]["status"] != "generated"
+
+
+def test_feedback_runtime_application_validator_exception_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_validator_exception(
+        _payload: object,
+        *,
+        require_feedback_id: bool = True,
+    ) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+        raise RuntimeError("raw_completion should not be exposed")
+
+    monkeypatch.setattr(
+        feedback_app_service,
+        "validate_final_feedback_payload",
+        raise_validator_exception,
+    )
+    session_factory = _session_factory()
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    session_id, answer_id = _create_answer_ready_for_feedback(app, session_factory)
+
+    status_code, feedback_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": answer_id},
+        headers=_feedback_headers("feedback-runtime-app-validator-exception-001"),
+    )
+
+    assert status_code == 202
+    data = feedback_body["data"]
+    assert data["status"] == "generation_failed"
+    assert data["retryable"] is True
+    assert data["validation_errors"] == ["feedback_payload_validator_exception"]
+    assert data["feedback_payload"]["status"] != "generated"
+    serialized_response = json.dumps(feedback_body, ensure_ascii=False, sort_keys=True)
+    assert "raw_completion should not be exposed" not in serialized_response
+
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["status"] == "generation_failed"
+    assert failed_payload["score_result"] is None
+    assert failed_payload["loss_points"] == []
+    assert failed_payload["reference_answer"] is None
+    serialized_payload = json.dumps(failed_payload, ensure_ascii=False, sort_keys=True)
+    assert "raw_completion should not be exposed" not in serialized_payload
+    repository = SqlAlchemyPolishRepository(session_factory)
+    assert not any(
+        feedback.status == "generated"
+        for feedback in repository.list_feedbacks_for_session(OWNER_A, session_id)
+    )
+
+
 def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_reserved() -> None:
     session_factory = _session_factory()
     llm_transport = _ValidatorFailedFeedbackTransport()
@@ -1499,20 +1644,20 @@ def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_
     data = feedback_body["data"]
     assert data["status"] == "generation_failed"
     assert data["retryable"] is True
-    assert data["feedback_id"]
-    assert data["feedback_status"] == "generation_failed"
-    assert data["feedback_payload"]["status"] == "generation_failed"
-    assert data["feedback_payload"]["status"] != "reserved"
-    assert data["feedback_payload"]["feedback_text"] == "反馈生成失败，可重试"
-    assert data["feedback_payload"]["error"]["code"] in data["validation_errors"]
+    assert data["feedback_status"] != "generated"
+    assert data["feedback_payload"]["status"] not in {"generated", "reserved"}
     assert data["validation_errors"]
-    assert data["feedback_payload"]["feedback_metadata"]["llm_called"] is True
-    assert data["feedback_payload"]["feedback_metadata"]["provider_status"] == "called"
-    assert data["feedback_payload"]["feedback_metadata"]["candidate_valid"] is False
-    assert data["feedback_payload"]["feedback_metadata"]["validation_stage"] == "analysis_candidate"
     repository = SqlAlchemyPolishRepository(session_factory)
     stored_feedbacks = repository.list_feedbacks_for_session(OWNER_A, session_id)
     assert not any(feedback.status == "generated" for feedback in stored_feedbacks)
+    failed_payload = _stored_failed_payload_for_answer(session_factory, session_id, answer_id)
+    assert failed_payload["status"] == "generation_failed"
+    assert failed_payload["feedback_text"] == "反馈生成失败，可重试"
+    assert failed_payload["error"]["code"] in data["validation_errors"]
+    assert failed_payload["feedback_metadata"]["llm_called"] is True
+    assert failed_payload["feedback_metadata"]["provider_status"] == "called"
+    assert failed_payload["feedback_metadata"]["candidate_valid"] is False
+    assert failed_payload["feedback_metadata"]["validation_stage"] == "analysis_candidate"
     _, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
     detail_answer = next(
         answer
@@ -1520,4 +1665,4 @@ def test_feedback_runtime_validator_failed_does_not_write_generated_feedback_or_
         for answer in turn["answers"]
         if answer["answer_id"] == answer_id
     )
-    assert detail_answer["feedback_payload"]["status"] == "generation_failed"
+    assert detail_answer["feedback_payload"]["status"] != "generated"

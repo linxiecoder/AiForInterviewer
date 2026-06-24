@@ -217,6 +217,7 @@ def validate_feedback_candidate_payload(
         normalized.get("score_reasoning"),
         warnings=warnings,
     )
+    errors.extend(_score_value_range_errors(normalized.get("score_result")))
     normalized_score_result, score_errors, score_warnings = normalize_semantic_score_result(
         normalized.get("score_result"),
         expected_progress_state_ref=expected_progress_state_ref,
@@ -341,6 +342,7 @@ def validate_final_feedback_payload(
         max_item_chars=FEEDBACK_VALIDATION_WARNING_MAX_CHARS,
     )
 
+    errors.extend(_score_value_range_errors(normalized.get("score_result")))
     normalized_score_result, score_errors, score_warnings = normalize_semantic_score_result(normalized.get("score_result"))
     errors.extend(score_errors)
     if score_warnings:
@@ -475,6 +477,19 @@ def _append_candidate_reference_answer_recovery_warnings(payload: dict[str, Any]
         addresses = section.get("addresses_loss_point_ids")
         if addresses is not None and not isinstance(addresses, list):
             warnings.append("reference_answer_addresses_loss_point_ids_invalid")
+
+
+def _score_value_range_errors(score_result: object) -> tuple[str, ...]:
+    if not isinstance(score_result, dict):
+        return ()
+    score_value = score_result.get("score_value")
+    if score_value is None:
+        return ()
+    if isinstance(score_value, bool) or not isinstance(score_value, (int, float)):
+        return ("score_value_invalid",)
+    if not 0 <= float(score_value) <= 100:
+        return ("score_value_out_of_range",)
+    return ()
 
 
 def _candidate_model_errors(exc: ValidationError) -> tuple[str, ...]:

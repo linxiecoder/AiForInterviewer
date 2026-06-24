@@ -50,6 +50,7 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_FINAL_SCHEMA_VERSION,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.feedback_validation import validate_final_feedback_payload
 from app.application.polish.next_question_authorization import (
     feedback_next_question_authorization_metadata,
 )
@@ -81,6 +82,8 @@ _FEEDBACK_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 _FEEDBACK_SYNC_WAIT_SECONDS = 0.25
 _BACKGROUND_FEEDBACK_EXCEPTION_ERROR_CODE = "feedback_generation_background_exception"
 _BACKGROUND_FEEDBACK_EXCEPTION_STAGE = "background_worker"
+_FEEDBACK_PAYLOAD_VALIDATION_EXCEPTION_ERROR_CODE = "feedback_payload_validator_exception"
+_FEEDBACK_PAYLOAD_VALIDATION_STAGE = "application_final_payload_validation"
 _FEEDBACK_LIFECYCLE_RESPONSE_STATUSES = {
     AiTaskStatus.CANCELLED.value: AiTaskStatus.CANCELLED,
     AiTaskStatus.TIMED_OUT.value: AiTaskStatus.TIMED_OUT,
@@ -346,68 +349,20 @@ def _complete_feedback_generation(
     generation_result = FeedbackExecutionHandler(operations._feedback_generation_service).generate(generation_context)
     generation_metadata = dict(generation_result.metadata) | {"execution_flow": execution_flow}
     if not generation_result.succeeded or generation_result.payload is None:
-        failed_payload = _failed_feedback_payload_for_storage(
+        return _persist_failed_feedback_generation(
+            operations,
+            owner_id=owner_id,
+            actor_id=actor_id,
             session_id=session_id,
             question_id=question_id,
             answer_id=answer_id,
-            feedback_id=feedback_id,
-            validation_errors=generation_result.validation_errors,
-            metadata=generation_metadata,
-        )
-        safe_task_summary = _failed_feedback_task_safe_summary(
             task_id=task_id,
-            session_id=session_id,
-            question_id=question_id,
-            answer_id=answer_id,
             feedback_id=feedback_id,
-            validation_errors=generation_result.validation_errors,
-            metadata=generation_metadata,
-        )
-        task = PolishTaskStatus(
-            ai_task_id=task_id,
-            task_type=POLISH_FEEDBACK_TASK_TYPE,
-            status=AiTaskStatus.GENERATION_FAILED,
-            contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
-            retryable=True,
-            result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
-            user_visible_status="反馈生成失败，可重试",
-            validation_errors=generation_result.validation_errors,
-            safe_summary=safe_task_summary,
-        )
-        feedback = PolishFeedback(
-            feedback_id=feedback_id,
-            owner_id=owner_id,
-            actor_id=actor_id,
-            session_id=session_id,
-            answer_id=answer_id,
-            ai_task_id=task_id,
-            score_result_id=None,
-            feedback_summary=json.dumps(failed_payload, ensure_ascii=False, sort_keys=True),
-            status=str(AiTaskStatus.GENERATION_FAILED),
-            created_at=now,
-            updated_at=now,
-        )
-        generation_log_fields = _feedback_generation_log_fields(generation_metadata)
-        LogUtil.feedback_generation_failed(
-            session_id=session_id,
-            question_id=question_id,
-            answer_id=answer_id,
-            error_code=(
-                feedback_error_code(generation_result.validation_errors)
-                if generation_result.validation_errors
-                else None
-            ),
-            duration_ms=_feedback_generation_duration_ms(generation_started_at),
-            **generation_log_fields,
-        )
-        return _persist_feedback_task_result(
-            operations._polish_repository,
-            feedback=feedback,
-            task=task,
-            owner_id=owner_id,
-            actor_id=actor_id,
             target_ref_id=target_ref_id,
             idempotency_record_id=idempotency_record_id,
+            validation_errors=generation_result.validation_errors,
+            metadata=generation_metadata,
+            generation_started_at=generation_started_at,
         )
 
     payload = _generated_feedback_payload_for_storage(
@@ -426,6 +381,29 @@ def _complete_feedback_generation(
         feedback_id=feedback_id,
     )
     payload = planned_feedback_handoff.payload
+    normalized_payload, validation_errors = _validate_final_feedback_payload_fail_closed(payload)
+    if validation_errors:
+        failure_metadata = _application_payload_validation_failure_metadata(
+            generation_metadata,
+            validation_errors=validation_errors,
+        )
+        return _persist_failed_feedback_generation(
+            operations,
+            owner_id=owner_id,
+            actor_id=actor_id,
+            session_id=session_id,
+            question_id=question_id,
+            answer_id=answer_id,
+            task_id=task_id,
+            feedback_id=feedback_id,
+            target_ref_id=target_ref_id,
+            idempotency_record_id=idempotency_record_id,
+            validation_errors=validation_errors,
+            metadata=failure_metadata,
+            generation_started_at=generation_started_at,
+        )
+    if normalized_payload is not None:
+        payload = normalized_payload
     feedback = PolishFeedback(
         feedback_id=feedback_id,
         owner_id=owner_id,
@@ -468,6 +446,121 @@ def _complete_feedback_generation(
         **generation_log_fields,
     )
     return persist_result
+
+
+def _validate_final_feedback_payload_fail_closed(
+    payload: object,
+) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    try:
+        return validate_final_feedback_payload(payload)
+    except Exception:  # noqa: BROAD_EXCEPT_OK
+        return None, (_FEEDBACK_PAYLOAD_VALIDATION_EXCEPTION_ERROR_CODE,)
+
+
+def _application_payload_validation_failure_metadata(
+    metadata: dict[str, Any],
+    *,
+    validation_errors: tuple[str, ...],
+) -> dict[str, Any]:
+    source = dict(metadata) if isinstance(metadata, dict) else {}
+    generation_stages = source.get("generation_stages")
+    stages = list(generation_stages) if isinstance(generation_stages, list) else []
+    safe_errors = [error for error in validation_errors if error]
+    stages.append(
+        {
+            "stage": _FEEDBACK_PAYLOAD_VALIDATION_STAGE,
+            "validation_status": "invalid",
+            "failure_reason": feedback_error_code(validation_errors),
+            "validation_errors": safe_errors,
+        }
+    )
+    return source | {
+        "validation_stage": _FEEDBACK_PAYLOAD_VALIDATION_STAGE,
+        "stage": _FEEDBACK_PAYLOAD_VALIDATION_STAGE,
+        "candidate_valid": False,
+        "llm_output_validation_status": "invalid",
+        "provider_status": source.get("provider_status") or "called",
+        "llm_called": _metadata_bool(source.get("llm_called")) or True,
+        "provider_error_type": feedback_error_code(validation_errors),
+        "generation_stages": stages,
+    }
+
+
+def _persist_failed_feedback_generation(
+    operations: _FeedbackOperations,
+    *,
+    owner_id: str,
+    actor_id: str,
+    session_id: str,
+    question_id: str,
+    answer_id: str,
+    task_id: str,
+    feedback_id: str,
+    target_ref_id: str,
+    idempotency_record_id: str | None,
+    validation_errors: tuple[str, ...],
+    metadata: dict[str, Any],
+    generation_started_at: float,
+) -> ApplicationResult[PolishTaskStatus]:
+    now = utc_now()
+    failed_payload = _failed_feedback_payload_for_storage(
+        session_id=session_id,
+        question_id=question_id,
+        answer_id=answer_id,
+        feedback_id=feedback_id,
+        validation_errors=validation_errors,
+        metadata=metadata,
+    )
+    safe_task_summary = _failed_feedback_task_safe_summary(
+        task_id=task_id,
+        session_id=session_id,
+        question_id=question_id,
+        answer_id=answer_id,
+        feedback_id=feedback_id,
+        validation_errors=validation_errors,
+        metadata=metadata,
+    )
+    task = PolishTaskStatus(
+        ai_task_id=task_id,
+        task_type=POLISH_FEEDBACK_TASK_TYPE,
+        status=AiTaskStatus.GENERATION_FAILED,
+        contract_ids=POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
+        retryable=True,
+        result_ref=TraceRef(trace_ref_id=task_id, trace_type="validation_result", created_at=now),
+        user_visible_status="反馈生成失败，可重试",
+        validation_errors=validation_errors,
+        safe_summary=safe_task_summary,
+    )
+    feedback = PolishFeedback(
+        feedback_id=feedback_id,
+        owner_id=owner_id,
+        actor_id=actor_id,
+        session_id=session_id,
+        answer_id=answer_id,
+        ai_task_id=task_id,
+        score_result_id=None,
+        feedback_summary=json.dumps(failed_payload, ensure_ascii=False, sort_keys=True),
+        status=str(AiTaskStatus.GENERATION_FAILED),
+        created_at=now,
+        updated_at=now,
+    )
+    LogUtil.feedback_generation_failed(
+        session_id=session_id,
+        question_id=question_id,
+        answer_id=answer_id,
+        error_code=feedback_error_code(validation_errors) if validation_errors else None,
+        duration_ms=_feedback_generation_duration_ms(generation_started_at),
+        **_feedback_generation_log_fields(metadata),
+    )
+    return _persist_feedback_task_result(
+        operations._polish_repository,
+        feedback=feedback,
+        task=task,
+        owner_id=owner_id,
+        actor_id=actor_id,
+        target_ref_id=target_ref_id,
+        idempotency_record_id=idempotency_record_id,
+    )
 
 
 def _persist_feedback_generation_background_exception(

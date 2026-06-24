@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from copy import deepcopy
 import json
 
 import pytest
@@ -15,16 +17,125 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_FINAL_CONTRACT_IDS,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.feedback_validation import validate_final_feedback_payload
 from app.domain.shared.clock import utc_now
 from app.domain.shared.enums import AiTaskStatus
 from app.domain.shared.refs import TraceRef
 from app.infrastructure.db.models.ai_task import AiTask, AiTaskResult
 from app.infrastructure.db.repositories.polish import SqlAlchemyPolishRepository
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
+from tests.api.test_polish_feedback_validation import _final_payload
 
 
 def _serialized(payload: object) -> str:
     return json.dumps(payload, default=str, ensure_ascii=False, sort_keys=True)
+
+
+PayloadMutator = Callable[[dict[str, object]], None]
+
+
+def _make_malformed_payload(payload: dict[str, object]) -> None:
+    payload.clear()
+    payload.update({"status": "generated", "feedback_text": "partial truncated payload"})
+
+
+def _drop_score_result(payload: dict[str, object]) -> None:
+    payload.pop("score_result", None)
+
+
+def _set_score_value_out_of_range(payload: dict[str, object]) -> None:
+    score_result = payload["score_result"]
+    assert isinstance(score_result, dict)
+    score_result["score_value"] = 101
+
+
+def _set_dimension_score_out_of_range(payload: dict[str, object]) -> None:
+    score_result = payload["score_result"]
+    assert isinstance(score_result, dict)
+    dimension_scores = score_result["dimension_scores"]
+    assert isinstance(dimension_scores, list)
+    first_dimension = dimension_scores[0]
+    assert isinstance(first_dimension, dict)
+    first_dimension["score"] = 101
+
+
+def _drop_required_dimension(payload: dict[str, object]) -> None:
+    score_result = payload["score_result"]
+    assert isinstance(score_result, dict)
+    dimension_scores = score_result["dimension_scores"]
+    assert isinstance(dimension_scores, list)
+    dimension_scores.pop()
+
+
+def _empty_reference_answer(payload: dict[str, object]) -> None:
+    payload["reference_answer"] = {"sections": []}
+
+
+def _set_loss_points_wrong_type(payload: dict[str, object]) -> None:
+    payload["loss_points"] = {"loss_point_id": "lp_wrong_type"}
+
+
+@pytest.mark.parametrize(
+    ("case_id", "mutate"),
+    (
+        ("BE011-1 malformed payload", _make_malformed_payload),
+        ("BE011-2 missing score_result", _drop_score_result),
+        ("BE011-3 total score outside 0-100", _set_score_value_out_of_range),
+        ("BE011-4 dimension score outside 0-100", _set_dimension_score_out_of_range),
+        ("BE011-4 missing required dimension", _drop_required_dimension),
+        ("BE011-5 empty reference_answer", _empty_reference_answer),
+        ("BE011-6 loss_points wrong type", _set_loss_points_wrong_type),
+    ),
+)
+def test_step3_final_payload_validator_rejects_invalid_generated_shapes(
+    case_id: str,
+    mutate: PayloadMutator,
+) -> None:
+    # Given
+    payload = deepcopy(_final_payload())
+    mutate(payload)
+
+    # When
+    normalized, validation_errors = validate_final_feedback_payload(payload)
+
+    # Then
+    assert normalized is None, case_id
+    assert validation_errors, case_id
+
+
+def test_step3_validator_exception_returns_safe_failure_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.polish import feedback_generation_service
+    from tests.api.test_polish_feedback_generation_service import (
+        _context,
+        _generated_payload,
+        _PayloadTransport,
+        _service,
+    )
+
+    def raise_validator_exception(
+        _payload: object,
+        *,
+        require_feedback_id: bool = True,
+    ) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+        raise RuntimeError("raw_provider_payload should never reach API")
+
+    # Given
+    monkeypatch.setattr(
+        feedback_generation_service,
+        "validate_final_feedback_payload",
+        raise_validator_exception,
+    )
+
+    # When
+    result = _service(_PayloadTransport(_generated_payload())).generate_feedback_v1(_context())
+
+    # Then
+    assert result.succeeded is False
+    assert result.payload is None
+    assert result.validation_errors
+    assert "raw_provider_payload" not in _serialized(
+        {"validation_errors": result.validation_errors, "metadata": result.metadata}
+    )
 
 
 def test_failed_feedback_payload_contract_is_retryable_and_sanitized() -> None:

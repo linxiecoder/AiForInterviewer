@@ -36,6 +36,7 @@ from app.application.polish.transcript_signal_parser import (
 
 
 FEEDBACK_GENERATION_SERVICE_VERSION = "polish_feedback_generation_service.v1"
+FEEDBACK_PAYLOAD_VALIDATOR_EXCEPTION_ERROR_CODE = "feedback_payload_validator_exception"
 _StringObjectMap = Mapping[str, object]
 _REQUIRED_CONTEXT_FIELDS = (
     "owner_id",
@@ -369,10 +370,14 @@ class FeedbackGenerationService:
             server_projected_payload=server_projected_payload,
             projection_trace_refs=projection_result.trace_refs,
         )
-        normalized_payload, validation_errors = validate_final_feedback_payload(
-            projected_payload,
-            require_feedback_id=False,
-        )
+        try:
+            normalized_payload, validation_errors = validate_final_feedback_payload(
+                projected_payload,
+                require_feedback_id=False,
+            )
+        except Exception:  # noqa: BROAD_EXCEPT_OK
+            normalized_payload = None
+            validation_errors = (FEEDBACK_PAYLOAD_VALIDATOR_EXCEPTION_ERROR_CODE,)
         projection_stage = _stage_diagnostic(
             FEEDBACK_PROJECTION_STAGE,
             projection_metadata,
