@@ -74,14 +74,15 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-FE-002 | F6 | M6 | SHOULD | Feedback display and refresh recovery survey | 只做前端反馈展示、失败折叠、刷新恢复、状态提示去重和验收证据展示缺口探查；不修改页面代码 | UX/FE 展示差距清单、刷新恢复验收建议 | AIFI-PROD-011；AIFI-QA-003 | NOT_STARTED |
 | AIFI-REL-008 | F8 | M8 | MUST | Feedback rollback and degradation gate plan | 规划 feedback-loop 重构的开关、降级、数据兼容、迁移、恢复和发布门槛；不声明 release-ready | rollback/degradation gate TODO、发布门槛清单 | AIFI-PROD-011；AIFI-ARCH-009；AIFI-QA-003；AIFI-BE-009；AIFI-FE-002 | NOT_STARTED |
 | AIFI-QA-004 | F7 | M7 | MUST | Feedback acceptance semantics tests | 基于 `.omo/plans/plan.md` Step 1 建立 AC-001、AC-002、AC-003、AC-012 首批 feedback 验收语义测试护栏；当前收口为 `ACCEPTED_RED`，RED 作为后续实现缺口证据 | `tests/api/test_polish_feedback_acceptance_semantics.py` 等 pytest 覆盖和语义矩阵证据 | AIFI-PROD-011；AIFI-TRACE-001；当轮 scope lock | ACCEPTED_RED |
-| AIFI-BE-010 | F5 | M5 | MUST | Effective feedback state and compatibility | 实现有效 feedback 状态、旧 payload 兼容投影和 API/schema 兼容读取；AIFI-BE-009 仅作为参考上下文，不再作为硬依赖，AIFI-BE-009=NOT_STARTED 不阻塞本任务启动；Step2-A 必须在本任务内完成材料补齐、代码事实探查和 scope lock | 后端状态契约、兼容投影、相关 tests/api | AIFI-QA-004；AIFI-BE-009（参考上下文，非硬依赖） | READY_TO_START |
+| AIFI-BE-010 | F5 | M5 | MUST | Effective feedback state and compatibility | 实现有效 feedback 状态、旧 payload 兼容投影和 API/schema 兼容读取；AIFI-BE-009 仅作为参考上下文，不再作为硬依赖，AIFI-BE-009=NOT_STARTED 不阻塞本任务启动；Step2 effective feedback selector 已完成并提交 | 后端状态契约、兼容投影、相关 tests/api；Step2 commit `763ad98668535998bb7c16ad32e08d7bae1bc94a` | AIFI-QA-004；AIFI-BE-009（参考上下文，非硬依赖） | DONE |
 | AIFI-BE-011 | F5 | M5 | MUST | Fail-closed feedback validation | 实现 feedback 生成失败时的 fail-closed 校验、投影和错误折叠 | validation/projection/service 行为和失败路径 tests/api | AIFI-BE-010 | DONE |
-| AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和评分归一化 | scoring/runtime 稳定性行为和回归 tests/api | AIFI-BE-010；AIFI-BE-011 | READY_TO_START |
-| AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 实现 progress mastery、手动完成和有效反馈状态一致性 | progress/use cases 一致性行为和 tests/api | AIFI-BE-010；AIFI-BE-012 | NOT_STARTED |
+| AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和评分归一化；Step4 closeout 已通过 | scoring/runtime 稳定性行为和回归 tests/api；Step4 commit `2e82dbfbc8f23d0c09cd784a94190dceecc36732` | AIFI-BE-010；AIFI-BE-011 | DONE |
+| AIFI-BE-015 | F5 | M5 | MUST | Improved-answer trend calibration and effective-result consistency | 实现改进回答后的评分趋势校准、current effective feedback result 一致性，以及 Step2/Step3/Step4 兼容 | improvement trend / effective-result 行为和相关 tests/api | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-QA-004 | READY_TO_START |
+| AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 实现 progress mastery、手动完成和有效反馈状态一致性 | progress/use cases 一致性行为和 tests/api | AIFI-BE-010；AIFI-BE-012；AIFI-BE-015 | NOT_STARTED |
 | AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 实现追问、下一题、progress 绑定和相似度拦截语义 | question generation/progress binding 行为和 tests/api | AIFI-BE-013 | NOT_STARTED |
 | AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model、失败折叠和旧 payload 容错 | `entities/polish` view model/types/API 适配和 FE tests | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002 | NOT_STARTED |
-| AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
-| AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
+| AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
+| AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
 
 ## 2. BMAD feedback-loop planning intake task details
 
@@ -211,16 +212,24 @@ Downstream handling：
 
 ### AIFI-BE-010 Effective feedback state and compatibility
 
-- 背景：`.omo/plans/plan.md` Step 2 和 Step 5 要求后端有单一 effective feedback state，并能兼容旧 feedback payload、pending/failed 状态和只读投影，防止旧数据在 API 与 progress 之间表现不一致。
+- 背景：`.omo/plans/plan.md` Step 2 要求后端有单一 effective feedback state，并能兼容旧 feedback payload、pending/failed 状态和只读投影，防止旧数据在 API 与 progress 之间表现不一致。Step 5 中 current effective feedback selector 与本任务兼容，但完整 Step5 implementation 由 AIFI-BE-015 承接。
 - 范围：本任务只授权 Step2 的 effective feedback state、feedback history、failure record exclusion、old payload compatibility、read-time projection，以及与该范围直接相关的 tests/api；允许为 scope lock 做 Step2-A 材料补齐和代码事实探查。
 - 非目标：不授权 Step3 fail-closed validation；不授权 Step4 same-answer stability implementation；不授权 Step5 improvement trend implementation；不授权 Step6 progress mastery；不授权 Step7 question generation；不授权 FE、migration 或 release。
 - 允许修改路径：`apps/api/app/application/polish/**`；`apps/api/app/schemas/polish.py`；`apps/api/app/infrastructure/db/repositories/polish.py`；相关 `tests/api/test_polish_feedback*_compatibility*.py`、`tests/api/test_polish_effective_feedback_state.py`、`tests/api/test_polish_api.py` 中限定 feedback state/compatibility 的测试。
 - 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
 - 依赖：AIFI-QA-004。AIFI-BE-009 仅作为参考上下文，AIFI-BE-009=NOT_STARTED 不再硬阻塞 AIFI-BE-010；Step2-A 必须在 AIFI-BE-010 内完成材料补齐、代码事实探查和 scope lock，并在 scope lock 中重新列出 allowed paths / forbidden paths。
 - 验收标准：旧 payload、无 feedback payload、pending/failed/succeeded 状态都有稳定投影；API 返回不破坏既有字段；effective feedback selector 只选当前有效反馈；相关兼容测试通过；未引入迁移。
-- 对应 plan.md Step：Step 2；Step 5 中 current effective feedback selector；Step 8 中与 feedback state/schema 兼容有关的 API envelope。
+- 对应 plan.md Step：Step 2；Step 5 中 current effective feedback selector 的兼容依赖；Step 8 中与 feedback state/schema 兼容有关的 API envelope。本任务不授权 Step5 improvement trend implementation。
 - 对应 PRD AC / FR / BR：AC-004、AC-005、AC-006、AC-012、AC-013；FR-006 到 FR-011、FR-024、FR-026、FR-027、FR-039 到 FR-047、FR-058 到 FR-061；BR-009、BR-010、BR-016 到 BR-023。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务可实现兼容状态字段和投影，但不关闭 C-050、C-052、C-053，也不决定 C-049、C-051、C-054。
+
+#### Step 2 closeout
+
+- 最终状态：DONE / CLOSED。Step 2 / AIFI-BE-010 effective feedback selector 已通过 closeout 并提交。
+- commit：`763ad98668535998bb7c16ad32e08d7bae1bc94a`（`fix(polish-api): project effective feedback state`）。
+- evidence：`.omo/evidence/plan/step2-closeout.md` 记录 `result=PASS`。
+- 已完成范围：latest valid generated feedback 作为 current effective feedback；failed feedback 不覆盖 valid feedback；legacy JSON / plain-text payload 可兼容读取；failure record 不参与 effective feedback / score / recommendation。
+- 明确不覆盖：Step5 improvement trend、Step6 progress mastery、Step7 question generation / similarity interception、FE、migration、release、C-049 到 C-054 关闭。
 
 ### AIFI-BE-011 Fail-closed feedback validation
 
@@ -255,6 +264,27 @@ Downstream handling：
 - 对应 PRD AC / FR / BR：AC-001、AC-002、AC-003、AC-004、AC-005；FR-012 到 FR-018、FR-024、FR-039 到 FR-047；BR-007、BR-008、BR-016 到 BR-020。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务不决定相似度阈值、考察点与题目绑定模型、失败记录折叠最终样式、错误枚举最终映射、刷新恢复状态机或下一题算法；仅确保 Step 4 已授权 feedback runtime 的稳定性。
 
+#### Step 4 closeout
+
+- 最终状态：DONE / CLOSED。Step 4 / AIFI-BE-012 已通过 review-work PASS 并提交。
+- commit：`2e82dbfbc8f23d0c09cd784a94190dceecc36732`（`feat(aifi): close step4 feedback stability`）。
+- evidence：`.omo/evidence/step4-aifi-be-012-review-work-pass.md` 记录 Step4 review-work PASS；`.omo/evidence/plan/step4-ulw-loop-closeout.md` 状态为 PASS。
+- 已完成范围：AC-001 同题同答稳定性；AC-003 参考答案回灌高分自洽；Step2 effective feedback selector / 兼容投影回归不回退；Step3 fail-closed validation 回归不回退。
+- 未完成且不得被误认为完成的范围：Step5 improvement trend；Step6 progress mastery；Step7 question generation / similarity interception；FE 改造；migration；release；C-049 到 C-054 仍保持 Deferred / Open Question。
+
+### AIFI-BE-015 Improved-answer trend calibration and effective-result consistency
+
+- 背景：`.omo/plans/plan.md` Step 5 要求改进回答后的评分趋势应上升，并要求 current effective feedback result 不因历史失败态或旧结果回退。现有 AIFI-BE-010 只覆盖 effective feedback state / compatibility / selector 局部，且明确不授权 Step5 improvement trend implementation，因此不得强行复用 AIFI-BE-010 承接完整 Step5。
+- 范围：只授权 Step 5：improved-answer trend calibration、score_delta / dimension_delta 投影、derived_improvement_summary / derived_remaining_gap_summary / derived_regression_summary 的安全派生、current effective feedback result 一致性、failure record 不回退 current effective feedback、与 Step2 effective feedback selector、Step3 fail-closed validation、Step4 same-answer stability / reference replay 的兼容。
+- 非目标：不授权 Step6 progress mastery；不授权 Step7 next-question generation / similarity interception；不改 FE；不新增 migration；不做 release；不关闭 C-049 到 C-054；不更换 LLM provider；不把 Step5 的趋势策略扩展成长期能力画像或训练建议算法。
+- 允许修改路径：`apps/api/app/application/polish/**` 中 feedback trend、effective feedback result、score delta、payload projection 相关文件；`apps/api/app/schemas/polish.py` 中与 Step5 结果兼容的 additive 字段；`apps/api/app/infrastructure/db/repositories/polish.py` 中 current effective result 读取/投影相关最小调整；`tests/api/test_polish_feedback_improvement_trend.py`；`tests/api/test_polish_effective_feedback_state.py`；`tests/api/test_polish_feedback_stability.py`；`tests/api/test_polish_feedback_failure_contract.py`；必要的 `tests/api/test_polish_api.py` 中限定 Step5 effective result / trend consistency 的测试。
+- 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；依赖文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
+- 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-QA-004；Step4 commit `2e82dbfbc8f23d0c09cd784a94190dceecc36732`；Step4 review-work PASS。
+- 验收标准：改进回答后评分趋势在 Step1 AC-002 语义矩阵允许窗口内上升；current effective feedback result 始终指向 latest valid feedback；失败、pending、invalid 或旧 payload 不会回退 current effective result；不破坏 AC-001 同题同答稳定性；不破坏 AC-003 参考答案回灌；不破坏 Step3 fail-closed；相关 tests/api 通过。
+- 对应 plan.md Step：Step 5。
+- 对应 PRD AC / FR / BR：主要对应 AC-002；兼容 AC-001、AC-003、AC-004、AC-012、AC-013；FR-012 到 FR-018、FR-024、FR-039 到 FR-047、FR-058 到 FR-061；BR-007 到 BR-010、BR-016 到 BR-023。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只建立 Step5 改进趋势和 current effective result 一致性，不决定相似度阈值、考察点与题目绑定模型、失败记录折叠最终样式、错误枚举最终映射、刷新恢复状态机或下一题算法。
+
 ### AIFI-BE-013 Progress mastery and manual completion consistency
 
 - 背景：`.omo/plans/plan.md` Step 6 要求 progress mastery、manual completion 和有效 feedback 状态一致，避免无效 feedback 推动进度或手动完成覆盖真实状态。
@@ -262,7 +292,7 @@ Downstream handling：
 - 非目标：不实现下一题算法；不改前端交互；不新增迁移；不关闭 C-053。
 - 允许修改路径：`apps/api/app/application/polish/**`；`apps/api/app/schemas/polish.py` 中 progress/manual completion 相关字段；相关 `tests/api/test_polish_progress*.py`、`tests/api/test_polish_api.py`。
 - 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
-- 依赖：AIFI-BE-010；AIFI-BE-012；AIFI-QA-004。
+- 依赖：AIFI-BE-010；AIFI-BE-012；AIFI-BE-015；AIFI-QA-004。
 - 验收标准：只有有效 feedback 能推动 mastery/progress；manual completion 与 feedback invalid/failed/pending 状态不冲突；repeat answer 和旧 payload 场景保持兼容；相关 tests/api 通过。
 - 对应 plan.md Step：Step 6。
 - 对应 PRD AC / FR / BR：AC-004 到 AC-008、AC-013；FR-024、FR-026 到 FR-031、FR-039 到 FR-047；BR-007、BR-016 到 BR-023。
@@ -301,7 +331,7 @@ Downstream handling：
 - 非目标：不改 `entities/polish` contract 以外的后端；不创建新的设计系统；不最终关闭 C-051 或 C-053；不声明 release-ready。
 - 允许修改路径：`apps/web/src/pages/interview/InterviewPage.tsx`；同目录或现有 FE 测试目录下与 InterviewPage 相关的 `*.test.ts`、`*.test.tsx`；必要时仅修改页面邻近的测试 fixture。
 - 禁止修改路径：`apps/api/**`；`tests/api/**`；`apps/web/src/entities/polish/**` 中超出 AIFI-FE-003 contract 的改动；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
-- 依赖：AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004。
+- 依赖：AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004。
 - 验收标准：成功、pending、failed、invalid、legacy feedback 均有一致页面状态；刷新后不丢失有效 feedback；失败折叠不遮蔽可恢复动作；页面 smoke 或 FE tests 记录 Step 11 的关键路径。
 - 对应 plan.md Step：Step 10；Step 11 中页面集成与 smoke evidence。
 - 对应 PRD AC / FR / BR：AC-012、AC-013、AC-014、AC-015；FR-001、FR-019 到 FR-025、FR-027 到 FR-031、FR-052、FR-060、FR-061；BR-021 到 BR-023。
@@ -314,7 +344,7 @@ Downstream handling：
 - 非目标：不改业务代码；不改测试代码；不创建新 roadmap 或并行计划入口；不把 `_bmad-output` 或 `.omo/plans` 变成 active docs。
 - 允许修改路径：`docs/03-implementation/**` 中 release checklist、runbook、QA evidence、test plan 类 active docs；必要时同步 `docs/00-governance/DOCS_INDEX.md` 中新增 active doc 登记。
 - 禁止修改路径：`apps/**`；`tests/**`；`apps/api/migrations/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
-- 依赖：AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008。
+- 依赖：AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008。
 - 验收标准：release gate 明确 PASS/FAIL 条件；rollback 和 degradation checklist 可执行；QA evidence 记录测试命令、结果和未覆盖风险；未完成项不会被写成 release-ready；如新增 active doc 已登记到 DOCS_INDEX。
 - 对应 plan.md Step：Step 11 中集成 evidence 汇总；Step 12。
 - 对应 PRD AC / FR / BR：AC-001 到 AC-015；NFR-001 到 NFR-008；BR-001 到 BR-024。
