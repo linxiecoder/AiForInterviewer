@@ -33,6 +33,7 @@ from app.application.polish.feedback_validation import (
     validate_final_feedback_payload,
 )
 from app.application.polish.legacy_feedback_payload import normalize_legacy_final_feedback_payload
+from app.application.polish.payload_normalization import apply_step5_improvement_trend_controls
 from app.application.polish.phase5_evaluation_controls import apply_phase5_evaluation_controls
 from app.application.polish.transcript_signal_parser import (
     TranscriptSignalParser,
@@ -330,6 +331,10 @@ class FeedbackGenerationService:
             ruled_payload,
         )
         controlled_payload = apply_step4_stability_controls(
+            controlled_payload,
+            evaluation_context,
+        )
+        controlled_payload = apply_step5_improvement_trend_controls(
             controlled_payload,
             evaluation_context,
         )
@@ -719,6 +724,7 @@ def _projected_payload_with_server_facts(
     for field_name in ("schema_id", "schema_version", "contract_ids", "feedback_id"):
         if field_name not in projected:
             projected[field_name] = deepcopy(server_projected_payload.get(field_name))
+    projected["answer_change_analysis"] = deepcopy(server_projected_payload.get("answer_change_analysis"))
     projected["trace_refs"] = list(
         dict.fromkeys(
             (

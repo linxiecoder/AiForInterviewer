@@ -1436,10 +1436,14 @@ def _feedback_same_question_answers(
         score_result = feedback_payload.get("score_result") if isinstance(feedback_payload, dict) else None
         if not isinstance(score_result, dict):
             score_result = {}
+        generated_feedback_payload = (
+            dict(feedback_payload) if feedback_payload.get("status") == "generated" else {}
+        )
         answers.append(
             {
                 "answer_id": answer.answer_id,
                 "answer_round": answer.answer_round,
+                "answer_text": _feedback_context_excerpt(answer.answer_text, max_chars=12000),
                 "answer_summary": _feedback_context_excerpt(answer.answer_text, max_chars=700),
                 "feedback_summary": _feedback_context_excerpt(answer.feedback_text, max_chars=700),
                 "loss_point_ids": loss_point_ids,
@@ -1453,6 +1457,7 @@ def _feedback_same_question_answers(
                 "score_result": {"score_value": score_result.get("score_value")}
                 if score_result.get("score_value") is not None
                 else {},
+                "generated_feedback_payload": generated_feedback_payload,
             }
         )
     return tuple(answers)

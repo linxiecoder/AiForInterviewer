@@ -3607,6 +3607,112 @@ def test_polish_feedback_generates_when_question_metadata_missing() -> None:
     assert payload["feedback_text"]
     assert payload["status"] in {"generated", "partial"}
     assert payload["feedback_metadata"]["llm_called"] is True
+
+
+def test_feedback_same_key_duplicate_requests_do_not_depend_on_process_local_lock() -> None:
+    from tests.api.test_polish_feedback_acceptance_support import (
+        AcceptanceDeterministicTransport,
+        candidate_payload,
+    )
+
+    class Step5ApiTransport:
+        def __init__(self) -> None:
+            self.feedback = None
+            self.fallback = _ProviderStyleQuestionTransport()
+
+        def generate(self, request: LlmTransportRequest) -> LlmTransportResult:
+            if request.task_type == "polish_feedback_generation":
+                assert self.feedback is not None
+                return self.feedback.generate(request)
+            return self.fallback.generate(request)
+
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    transport = Step5ApiTransport()
+    app = _isolated_polish_app(session_factory, ACTOR_A, llm_transport=transport)
+    _, create_body = call_json(
+        app,
+        "/api/v1/polish-sessions",
+        "POST",
+        json_body={"resume_job_binding_id": binding_id, "topic_id": "topic_technical_depth"},
+    )
+    session_id = create_body["data"]["session_id"]
+    _, generate_body = _generate_initial_progress_tree(app, session_id)
+    progress_node_ref = generate_body["data"]["progress_tree_state"]["current_priority"]["progress_node_ref"]
+    question_id = _seed_polish_question_for_session(
+        session_factory,
+        session_id=session_id,
+        progress_node_ref=progress_node_ref,
+    )
+
+    def step5_candidate(score: int, loss_ids: list[str]) -> dict:
+        payload = candidate_payload(score, loss_ids=loss_ids)
+        score_result = payload["score_result"]
+        score_result["progress_state_ref"] = progress_node_ref
+        score_result["adaptive_rubric"]["progress_state_ref"] = progress_node_ref
+        for dimension_score in score_result["dimension_scores"]:
+            dimension_score["progress_focus"] = [progress_node_ref]
+        for progress_update in score_result["progress_updates"]:
+            progress_update["progress_node_ref"] = progress_node_ref
+        return payload
+
+    transport.feedback = AcceptanceDeterministicTransport([
+        step5_candidate(64, ["lp_recovery", "lp_observability"]),
+        step5_candidate(86, []),
+    ])
+
+    def submit_answer(answer_text: str) -> str:
+        _, body = call_json(
+            app,
+            f"/api/v1/polish-sessions/{session_id}/answers",
+            "POST",
+            json_body={"question_id": question_id, "answer_text": answer_text},
+        )
+        return body["data"]["answer_id"]
+
+    weak_answer_id = submit_answer("我只说明异步解耦，缺少失败恢复和观测指标。")
+    weak_status, weak_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": weak_answer_id},
+        headers={"Idempotency-Key": "polish-api-step5-weak-feedback-001"},
+    )
+    assert weak_status == 202
+    assert weak_body["data"]["feedback_payload"]["status"] in {"generated", "partial"}
+
+    improved_answer_id = submit_answer(
+        "我会保留消息队列异步解耦，并补充失败恢复、幂等键、死信、观测指标、告警和人工介入边界。"
+    )
+    improved_status, improved_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/feedback",
+        "POST",
+        json_body={"answer_id": improved_answer_id},
+        headers={"Idempotency-Key": "polish-api-step5-improved-feedback-001"},
+    )
+
+    assert improved_status == 202
+    payload = improved_body["data"]["feedback_payload"]
+    change = payload["answer_change_analysis"]
+    assert payload["status"] in {"generated", "partial"}
+    assert change["trend"] == "improved"
+    assert change["score_delta"] > 0
+    assert any(delta > 0 for delta in change["dimension_delta"].values())
+    assert change["derived_improvement_summary"]["score_delta"] == change["score_delta"]
+
+    detail_status, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+    assert detail_status == 200
+    answer = next(
+        item
+        for turn in detail_body["data"]["turns"]
+        for item in turn["answers"]
+        if item["answer_id"] == improved_answer_id
+    )
+    assert answer["feedback_id"] == improved_body["data"]["feedback_id"]
+    assert answer["feedback_payload"]["answer_change_analysis"] == change
+
+
 def test_polish_question_metadata_repository_roundtrips_and_falls_back_safely() -> None:
     session_factory = _session_factory()
     repository = SqlAlchemyPolishRepository(session_factory)
