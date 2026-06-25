@@ -14,6 +14,10 @@ from app.application.polish.feedback_agent import (
     FeedbackGenerationAgent,
 )
 from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+from app.application.polish.feedback_stability import (
+    apply_step4_stability_controls,
+    stable_feedback_generation_context,
+)
 from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_AGENT_PROMPT_VERSION,
     POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS,
@@ -28,6 +32,7 @@ from app.application.polish.feedback_validation import (
     validate_feedback_candidate_payload,
     validate_final_feedback_payload,
 )
+from app.application.polish.legacy_feedback_payload import normalize_legacy_final_feedback_payload
 from app.application.polish.phase5_evaluation_controls import apply_phase5_evaluation_controls
 from app.application.polish.transcript_signal_parser import (
     TranscriptSignalParser,
@@ -38,6 +43,13 @@ from app.application.polish.transcript_signal_parser import (
 FEEDBACK_GENERATION_SERVICE_VERSION = "polish_feedback_generation_service.v1"
 FEEDBACK_PAYLOAD_VALIDATOR_EXCEPTION_ERROR_CODE = "feedback_payload_validator_exception"
 _StringObjectMap = Mapping[str, object]
+_GENERATED_COMPATIBLE_VALIDATION_WARNINGS = frozenset(
+    {
+        "adaptive_rubric_progress_basis_recovered_from_dimension_scores",
+        "reference_answer_section_title_generated",
+        "score_reasoning_missing",
+    }
+)
 _REQUIRED_CONTEXT_FIELDS = (
     "owner_id",
     "actor_id",
@@ -85,6 +97,10 @@ class FeedbackGenerationResult:
     low_confidence_flags: tuple[str, ...] = ()
     trace_refs: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.succeeded and isinstance(self.payload, dict):
+            object.__setattr__(self, "payload", normalize_legacy_final_feedback_payload(self.payload))
 
 
 @dataclass(frozen=True)
@@ -146,6 +162,7 @@ class FeedbackGenerationService:
                 )
                 | {"provider_status": "not_called", "llm_called": False},
             )
+        evaluation_context = stable_feedback_generation_context(evaluation_context)
         prompt_asset = _with_provider_safe_candidate_prompt(
             build_feedback_prompt_asset(evaluation_context)
         )
@@ -311,6 +328,10 @@ class FeedbackGenerationService:
         ruled_payload = apply_feedback_core_rules(candidate_payload, evaluation_context)
         controlled_payload = apply_phase5_evaluation_controls(
             ruled_payload,
+        )
+        controlled_payload = apply_step4_stability_controls(
+            controlled_payload,
+            evaluation_context,
         )
         server_projected_payload = self._build_final_payload(
             ruled_payload=controlled_payload,
@@ -795,13 +816,28 @@ def _metadata_int(value: Any) -> int | None:
 
 def _feedback_status(ruled_payload: dict[str, Any]) -> str:
     status = _clean(ruled_payload.get("status"), max_chars=40)
-    if status in {"generated", "partial", "low_confidence", "validation_failed"}:
-        return status
     metadata = ruled_payload.get("feedback_metadata")
     validation_warnings = metadata.get("validation_warnings") if isinstance(metadata, dict) else None
-    if isinstance(validation_warnings, list) and validation_warnings:
+    if status == "partial" and isinstance(validation_warnings, list) and not _has_material_validation_warnings(
+        validation_warnings
+    ):
+        return "generated"
+    if status in {"generated", "partial", "low_confidence", "validation_failed"}:
+        return status
+    if _has_material_validation_warnings(validation_warnings):
         return "partial"
     return "generated"
+
+
+def _has_material_validation_warnings(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    warnings = {
+        warning
+        for item in value
+        if (warning := _clean(item, max_chars=160))
+    }
+    return bool(warnings - _GENERATED_COMPATIBLE_VALIDATION_WARNINGS)
 
 
 def _final_feedback_metadata(ruled_payload: dict[str, Any]) -> dict[str, Any]:
@@ -894,6 +930,7 @@ def _with_structured_answer(
     except Exception:
         return context_dict, ("structured_answer_parse_failed",)
     context_dict["structured_answer"] = structured_answer
+    context_dict["_step4_raw_answer_text"] = raw_answer_text
     context_dict["answer_text"] = structured_answer_to_evaluation_text(structured_answer)
     return context_dict, ()
 

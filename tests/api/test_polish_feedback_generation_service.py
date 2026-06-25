@@ -975,6 +975,42 @@ def test_prompt_asset_contains_current_question_and_answer_without_private_field
     assert not _contains_forbidden_key(asset)
 
 
+def test_prompt_asset_question_sources_match_source_refs_and_evidence_refs() -> None:
+    from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
+
+    context = _context()
+    context["evidence_refs"] = ["source_ref_only_match", "evidence_ref_only_match"]
+    context["question_sources"] = [
+        {
+            "ref": "unmatched_direct_ref",
+            "source_type": "resume_project",
+            "title": "Unmatched direct ref",
+            "summary": "This source must not be selected.",
+        },
+        {
+            "source_ref": "unmatched_source_ref",
+            "source_refs": ["source_ref_only_match"],
+            "source_type": "resume_project",
+            "title": "Matched by source_refs",
+            "summary": "This source is selected by source_refs only.",
+        },
+        {
+            "evidence_refs": ["evidence_ref_only_match"],
+            "source_type": "job_requirement",
+            "title": "Matched by evidence_refs",
+            "summary": "This source is selected by evidence_refs only.",
+        },
+    ]
+
+    asset = build_feedback_prompt_asset(context)
+    sources = asset["input_data"]["current_question"]["question_sources"]
+
+    assert [source["title"] for source in sources] == [
+        "Matched by source_refs",
+        "Matched by evidence_refs",
+    ]
+
+
 def test_prompt_asset_includes_same_question_answers() -> None:
     from app.application.polish.feedback_prompt_assets import build_feedback_prompt_asset
 
@@ -1273,6 +1309,61 @@ def test_phase4_same_question_regression_and_fixed_loss_points_are_reported() ->
     assert any(card["card_type"] == "answer_change" for card in result.payload["feedback_cards"])
 
 
+def test_reference_replay_does_not_floor_when_weak_points_match_replay_terms() -> None:
+    replay_term = "没有说明补偿任务的触发条件和终止条件。"
+    reference_text = "说明重试、补偿、幂等键、死信和人工介入边界。"
+    payload = _generated_payload()
+    payload["loss_points"] = [
+        {
+            "loss_point_id": "lp_recovery",
+            "severity": "major",
+            "deduction": 12,
+            "reason": replay_term,
+        }
+    ]
+    payload["reference_answer"] = {
+        "sections": [
+            {
+                "section_id": "ref_recovery",
+                "title": "失败恢复",
+                "content": reference_text,
+                "addresses_loss_point_ids": ["lp_recovery"],
+            }
+        ]
+    }
+    context = _context()
+    context["answer_text"] = reference_text
+    context["question_metadata"] = {"expected_answer_dimensions": []}
+    context["progress_node_snapshot"] = {
+        "node_ref": "progress_node_reliability",
+        "title": "可靠性设计",
+        "expected_capability": "",
+    }
+    context["job_snapshot"] = {"job_id": "job_001", "requirements": []}
+    context["canonical_project_assets"] = {"available": False, "items": []}
+    context["same_question_answers"] = [
+        {
+            "answer_id": "answer_prev_replay",
+            "answer_round": 1,
+            "loss_point_ids": ["lp_recovery"],
+            "generated_feedback_payload": {
+                "status": "generated",
+                "score_result": {"score_value": 80.0},
+                "loss_points": payload["loss_points"],
+                "reference_answer": payload["reference_answer"],
+            },
+        }
+    ]
+
+    result = _service(_PayloadTransport(payload)).generate_feedback_v1(context)
+
+    assert result.succeeded is True
+    assert result.payload is not None
+    assert result.payload["score_result"]["score_value"] == 76.6
+    assert result.payload["answer_coverage"]["weak_points"] == [replay_term]
+    assert result.payload["feedback_metadata"].get("reference_answer_replay_detected") is not True
+
+
 def test_service_uses_llm_comparator_dimensions_and_does_not_rule_score_loss_points() -> None:
     payload = _generated_payload()
     payload["loss_points"][0]["deduction"] = 20
@@ -1376,6 +1467,27 @@ def test_phase4_required_fields_can_be_enforced_by_validator() -> None:
     _, errors = validate_final_feedback_payload(_generated_payload())
 
     assert "feedback_final_required_fields_missing" in errors
+
+
+def test_missing_retrieved_rag_chunks_does_not_activate_unavailable_evidence_guard() -> None:
+    context = _context()
+    context.pop("retrieved_rag_chunks", None)
+
+    result = _service(_PayloadTransport(_generated_payload())).generate_feedback_v1(context)
+
+    assert result.succeeded is True
+    assert result.validation_errors == ()
+
+
+def test_explicit_empty_retrieved_rag_chunks_keeps_unavailable_evidence_guard() -> None:
+    context = _context()
+    context["retrieved_rag_chunks"] = {"available": False, "items": []}
+
+    result = _service(_PayloadTransport(_generated_payload())).generate_feedback_v1(context)
+
+    assert result.succeeded is False
+    assert "feedback_evidence_refs_unavailable" in result.validation_errors
+
 
 def _contains_forbidden_key(value: object) -> bool:
     forbidden = {

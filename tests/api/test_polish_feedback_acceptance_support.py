@@ -22,6 +22,7 @@ acceptance_test_matrix: dict[str, dict[str, Any]] = {
     },
     "AC-003": {
         "semantic": "reference_answer_replay",
+        # Step4 fixture guardrail only; OQ-007/OQ-008 remain open and this is not a final product threshold.
         "threshold_pending": {"replay_score_floor": 90.0},
     },
     "AC-012": {"semantic": "failed_generation_must_not_expose_success"},
@@ -120,6 +121,19 @@ def candidate_payload(score: float, *, loss_ids: list[str] | None = None) -> dic
         "score_reasoning": [{"dimension": "reliability", "rationale": "按恢复链路完整度评分。"}],
         "loss_points": [_loss_point(loss_id) for loss_id in active_loss_ids],
         "reference_answer": _reference_answer(active_loss_ids),
+        "answer_coverage": {
+            "covered_points": [
+                "异步解耦",
+                "失败恢复",
+                "幂等键",
+                "观测指标",
+                "人工介入边界",
+                "说明失败恢复、幂等和观测指标。",
+            ],
+            "missing_points": [],
+            "weak_points": [],
+            "contradicted_points": [],
+        },
     }
 
 
@@ -173,13 +187,13 @@ def _reference_answer(loss_ids: list[str]) -> dict[str, Any]:
             {
                 "section_id": "ref_recovery",
                 "title": "失败恢复",
-                "content": "说明重试、补偿、幂等键、死信和人工介入边界。",
+                "content": "说明消息队列异步解耦、失败恢复、重试、补偿、幂等键、死信和人工介入边界。",
                 "addresses_loss_point_ids": ["lp_recovery"] if "lp_recovery" in loss_ids else [],
             },
             {
                 "section_id": "ref_observability",
                 "title": "观测指标",
-                "content": "说明消息堆积、失败率、恢复耗时和告警阈值。",
+                "content": "说明观测指标、消息堆积、失败率、恢复耗时和告警阈值。",
                 "addresses_loss_point_ids": ["lp_observability"] if "lp_observability" in loss_ids else [],
             },
         ]

@@ -19,11 +19,28 @@ from tests.api.test_polish_feedback_acceptance_support import (
 def test_ac_001_same_question_same_answer_independent_runs_normalize_volatile_candidates() -> None:
     limits = acceptance_test_matrix["AC-001"]["threshold_pending"]
     volatile_scores = [82, 94, 76, 88, 91]
+    previous_payload = generate_payload(
+        FeedbackGenerationService(llm_transport=AcceptanceDeterministicTransport([candidate_payload(80)])),
+        context(answer_id="answer_stability_previous_generated"),
+    )
+    previous_answer = {
+        "answer_id": "answer_stability_previous",
+        "answer_text": str(context()["answer_text"]),
+        "loss_point_ids": sorted(loss_point_ids(previous_payload)),
+        "score_result": {"score_value": score_value(previous_payload)},
+        "generated_feedback_payload": previous_payload,
+    }
     transport = AcceptanceDeterministicTransport([candidate_payload(score) for score in volatile_scores])
     service = FeedbackGenerationService(llm_transport=transport)
 
     payloads = [
-        generate_payload(service, context(answer_id=f"answer_stability_{index}"))
+        generate_payload(
+            service,
+            context(
+                answer_id=f"answer_stability_{index}",
+                previous_answers=[previous_answer],
+            ),
+        )
         for index in range(len(volatile_scores))
     ]
 
@@ -96,7 +113,7 @@ def test_ac_003_reference_answer_replay_overrides_low_candidate_replay_score() -
     assert addressed_loss_point_ids(source_payload) == source_loss_ids, "AC-003 reference_answer_replay loss refs"
 
     replay_payload = generate_payload(
-        FeedbackGenerationService(llm_transport=AcceptanceDeterministicTransport([candidate_payload(61)])),
+        FeedbackGenerationService(llm_transport=AcceptanceDeterministicTransport([candidate_payload(61, loss_ids=[])])),
         context(
             answer_id="answer_reference_replay",
             answer_text=reference_answer_text(source_payload),
@@ -105,6 +122,7 @@ def test_ac_003_reference_answer_replay_overrides_low_candidate_replay_score() -
                     "answer_id": "answer_reference_source",
                     "loss_point_ids": sorted(source_loss_ids),
                     "score_result": {"score_value": score_value(source_payload)},
+                    "generated_feedback_payload": source_payload,
                 }
             ],
         ),

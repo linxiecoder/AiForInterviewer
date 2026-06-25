@@ -22,6 +22,7 @@ from app.application.polish.feedback_schema import (
     POLISH_FEEDBACK_CANDIDATE_TASK,
     POLISH_FEEDBACK_TASK_TYPE,
 )
+from app.application.polish.question_source_normalization import normalize_question_source_refs
 from app.application.polish.transcript_signal_parser import (
     POLISH_TRANSCRIPT_SIGNALS_SCHEMA_ID,
     TranscriptSignalParser,
@@ -902,7 +903,14 @@ def _compact_question_sources(values: list[Any], *, evidence_refs: tuple[str, ..
     for index, source in enumerate(_matching_question_sources(values, evidence_refs=evidence_refs), start=1):
         if not isinstance(source, dict):
             continue
-        ref = _first_text(source.get("ref"), source.get("ref_id"), source.get("source_ref"), f"question_source_{index}")
+        source_refs = normalize_question_source_refs(source)
+        ref = _first_text(
+            source.get("ref"),
+            source.get("ref_id"),
+            source.get("source_ref"),
+            *source_refs,
+            f"question_source_{index}",
+        )
         sources.append(
             {
                 "ref": ref,
@@ -922,12 +930,7 @@ def _matching_question_sources(values: list[Any], *, evidence_refs: tuple[str, .
     for source in values:
         if not isinstance(source, dict):
             continue
-        source_refs = {
-            _first_text(source.get("ref")),
-            _first_text(source.get("ref_id")),
-            _first_text(source.get("source_ref")),
-        }
-        if refs & {ref for ref in source_refs if ref}:
+        if refs & set(normalize_question_source_refs(source)):
             matched.append(source)
         if len(matched) >= _QUESTION_SOURCE_LIMIT:
             break
