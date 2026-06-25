@@ -77,8 +77,8 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-BE-010 | F5 | M5 | MUST | Effective feedback state and compatibility | 实现有效 feedback 状态、旧 payload 兼容投影和 API/schema 兼容读取；AIFI-BE-009 仅作为参考上下文，不再作为硬依赖，AIFI-BE-009=NOT_STARTED 不阻塞本任务启动；Step2 effective feedback selector 已完成并提交 | 后端状态契约、兼容投影、相关 tests/api；Step2 commit `763ad98668535998bb7c16ad32e08d7bae1bc94a` | AIFI-QA-004；AIFI-BE-009（参考上下文，非硬依赖） | DONE |
 | AIFI-BE-011 | F5 | M5 | MUST | Fail-closed feedback validation | 实现 feedback 生成失败时的 fail-closed 校验、投影和错误折叠 | validation/projection/service 行为和失败路径 tests/api | AIFI-BE-010 | DONE |
 | AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和评分归一化；Step4 closeout 已通过 | scoring/runtime 稳定性行为和回归 tests/api；Step4 commit `2e82dbfbc8f23d0c09cd784a94190dceecc36732` | AIFI-BE-010；AIFI-BE-011 | DONE |
-| AIFI-BE-015 | F5 | M5 | MUST | Improved-answer trend calibration and effective-result consistency | 实现改进回答后的评分趋势校准、current effective feedback result 一致性，以及 Step2/Step3/Step4 兼容 | improvement trend / effective-result 行为和相关 tests/api | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-QA-004 | READY_TO_START |
-| AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 实现 progress mastery、手动完成和有效反馈状态一致性 | progress/use cases 一致性行为和 tests/api | AIFI-BE-010；AIFI-BE-012；AIFI-BE-015 | NOT_STARTED |
+| AIFI-BE-015 | F5 | M5 | MUST | Improved-answer trend calibration and effective-result consistency | 实现改进回答后的评分趋势校准、current effective feedback result 一致性，以及 Step2/Step3/Step4 兼容；Step5 closeout 已通过并提交 | improvement trend / effective-result 行为和相关 tests/api；Step5 commit `ef95d4a9139d4c0f41593a6c9c57897d533aca0b` | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-QA-004 | DONE |
+| AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 实现 progress mastery、手动完成和有效反馈状态一致性；仅允许重新执行 Step6 scope lock，scope lock 返回授权前不得实现 | progress/use cases 一致性行为和 tests/api | AIFI-BE-010；AIFI-BE-012；AIFI-BE-015 | READY_TO_START |
 | AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 实现追问、下一题、progress 绑定和相似度拦截语义 | question generation/progress binding 行为和 tests/api | AIFI-BE-013 | NOT_STARTED |
 | AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model、失败折叠和旧 payload 容错 | `entities/polish` view model/types/API 适配和 FE tests | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002 | NOT_STARTED |
 | AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
@@ -285,6 +285,14 @@ Downstream handling：
 - 对应 PRD AC / FR / BR：主要对应 AC-002；兼容 AC-001、AC-003、AC-004、AC-012、AC-013；FR-012 到 FR-018、FR-024、FR-039 到 FR-047、FR-058 到 FR-061；BR-007 到 BR-010、BR-016 到 BR-023。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只建立 Step5 改进趋势和 current effective result 一致性，不决定相似度阈值、考察点与题目绑定模型、失败记录折叠最终样式、错误枚举最终映射、刷新恢复状态机或下一题算法。
 
+#### Step 5 closeout
+
+- 最终状态：DONE / CLOSED。Step 5 / AIFI-BE-015 已通过 closeout 并提交。
+- commit：`ef95d4a9139d4c0f41593a6c9c57897d533aca0b`（`feat(aifi): close step5 feedback trend`）。
+- evidence：`.omo/evidence/plan/step5-implementation-closeout.md` 记录 Step5 implementation closeout，`.omo/` 路径为 ignored evidence，不替代 active docs；本节只登记 active docs closeout 状态。
+- 已完成范围：improved-answer trend calibration、score_delta / dimension_delta 投影、derived improvement / remaining gap / regression summary、安全 current effective feedback result consistency、failure record 不回退 current effective feedback、Step2 / Step3 / Step4 兼容回归。
+- 未完成且不得被误认为完成的范围：Step6 progress mastery、Step7 next-question generation / similarity interception、FE 改造、migration、release、C-049 到 C-054 关闭。
+
 ### AIFI-BE-013 Progress mastery and manual completion consistency
 
 - 背景：`.omo/plans/plan.md` Step 6 要求 progress mastery、manual completion 和有效 feedback 状态一致，避免无效 feedback 推动进度或手动完成覆盖真实状态。
@@ -297,6 +305,15 @@ Downstream handling：
 - 对应 plan.md Step：Step 6。
 - 对应 PRD AC / FR / BR：AC-004 到 AC-008、AC-013；FR-024、FR-026 到 FR-031、FR-039 到 FR-047；BR-007、BR-016 到 BR-023。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务实现 progress 一致性，但不关闭 C-050、C-052、C-053，也不决定 C-049、C-051、C-054。
+
+#### Step 6 canonicalization and scope-lock readiness
+
+- canonical Step6 BE：AIFI-BE-013。
+- rejected drift ID：AIFI-BE-016。当前 BACKLOG 不新增 AIFI-BE-016，AIFI-BE-016 不得作为 Step6 scope lock、实现或测试入口。
+- Step5 依赖状态：AIFI-BE-015 已 DONE / CLOSED；Step6 不再因 Step5 active-doc closeout 缺失而阻断。
+- authorization_status：READY_TO_START。
+- 允许重新执行 Step6 scope lock：YES。
+- 当前授权边界：本状态只允许重新执行 Step6 scope lock；scope lock 返回 `execution_mode=AUTHORIZED` 前，不授权代码、测试、FE、migration、release 或 Step7 行为。
 
 ### AIFI-BE-014 Follow-up and next-question behavior
 
