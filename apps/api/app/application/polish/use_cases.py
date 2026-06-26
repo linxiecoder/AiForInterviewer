@@ -191,17 +191,6 @@ SESSION_DETAIL_VISIBLE_FEEDBACK_PAYLOAD_STATUSES: Final = frozenset(
         AiTaskStatus.CANCELLED.value,
     }
 )
-SESSION_DETAIL_VISIBLE_FAILED_FEEDBACK_STATUSES: Final = frozenset(
-    {
-        AiTaskStatus.VALIDATION_FAILED.value,
-        AiTaskStatus.SOURCE_UNAVAILABLE.value,
-        AiTaskStatus.GENERATION_FAILED.value,
-        AiTaskStatus.TIMED_OUT.value,
-        AiTaskStatus.CANCELLED.value,
-    }
-)
-
-
 def _stale_session_version_error(exc: PolishSessionVersionConflictError) -> DomainError:
     return DomainError(
         code="stale_version_conflict",
