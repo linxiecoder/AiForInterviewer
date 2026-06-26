@@ -83,7 +83,8 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-BE-017 | F5 | M5 | MUST | API schema and response envelope boundary | 已完成 Step8 后端 API response schema、payload envelope、signed action / feedback / progress / follow-up outputs 的兼容汇总；不改变 Step2-7 业务决策，不授权 FE、migration、release、Step9-12 或 C-049 到 C-054 关闭 | implementation commit `23990da79118d200024735f193ba9b5d4499d4a2`；response allowlist / response schema additive fields；backend contract tests；Step8 implementation scope lock evidence | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004 | DONE |
 | AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 已完成前端 feedback view model（视图模型）、失败折叠、旧 payload（载荷）容错和 Step8 response contract（响应契约）前端投影；不授权 Step10 / Step11 / Step12 页面交互或 release（发布） | implementation commit（实现提交）`7f5f889`；`entities/polish` view model/types/API 适配和 FE tests（前端测试）；Step9 scope lock（范围锁）、implementation review-work（实现审查）和 runtime contract（运行时契约）证据 | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002（参考上下文，非硬依赖）；AIFI-QA-004 | DONE |
 | AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 已完成 Step10 面试工作台页面层反馈交互和刷新恢复收口：选中反馈回答驱动固定 next action bar（下一步动作条）和 feedback next-question（基于反馈生成下一题）入口；不授权 Step11 integration（集成）/ real page QA（真实页面验收）、Step12 release（发布）、backend（后端）语义、entity contract（实体契约）、migration（迁移）、config（配置）、dependency（依赖）或 C-049 到 C-054 关闭 | docs authorization commit `612eef81e01cd1487c54cdc5655e9c64eb2c645e`；implementation commit `8aa4d01bcf36b4929d477a76582848f7d6545d2d`；Step10 scope lock / implementation review-work PASS；`npm.cmd run web:test`、`python -m pytest -p no:cacheprovider tests/web/test_interview_actions.py -q`、focused backend regression、`npm.cmd run web:build` 和 `git diff --check` 通过；limited smoke failure 保留为 residual risk（残余风险），不得写成 Step11 QA PASS | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004 | DONE |
-| AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
+| AIFI-QA-005 | F7 | M7 | MUST | Feedback-loop integration and real page QA | 授权 Step11 集成与真实页面 QA：复现并分流 Step10 limited smoke failure，驱动真实 interview/workbench 页面覆盖 generated、pending、partial、failure、refresh recovery、trusted / untrusted signed next action 和 follow-up 展示；不进入 Step12 release 或 rollback | Step11 implementation scope lock、真实页面 QA 截图 / action log、focused tests、implementation review-work evidence | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-BE-017；AIFI-FE-003；AIFI-FE-004 | READY_TO_START |
+| AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-BE-017；AIFI-FE-003；AIFI-FE-004；AIFI-QA-005；AIFI-REL-008 | NOT_STARTED |
 
 ## 2. BMAD feedback-loop planning intake task details
 
@@ -394,6 +395,36 @@ Downstream handling：
 - limited smoke（有限烟测）：`node scripts/qa/polish-feedback-frontend-smoke.mjs --scenario seeded-feedback-states --evidence-dir .omo/evidence/step10-polish-feedback-frontend-smoke` 失败于 `failed answer should expose generation_failed payload`；该结果记录为 Step10 residual risk（残余风险），不得写成 Step11 integration / real page QA PASS，且不在 Step10 allowed implementation paths 内修复。
 - 未完成且不得被误认为完成的范围：Step11 integration（集成）/ real page QA（真实页面验收）；Step12 release（发布）/ rollback（回滚）；backend（后端）语义；`apps/web/src/entities/polish/**` entity contract（实体契约）；migration（迁移）；config（配置）；dependency（依赖）；C-049 到 C-054 关闭。
 
+### AIFI-QA-005 Feedback-loop integration and real page QA
+
+- 背景：`.omo/plans/plan.md` Step 11 要求在真实运行面完成 integration（集成）和 real page QA（真实页面验收）。Step10 已完成页面层交互与刷新恢复实现，但 limited smoke 保留 `failed answer should expose generation_failed payload` residual risk（残余风险），不得直接写成 Step11 PASS。
+- 当前状态：READY_TO_START。Step11 initial scope lock 证据为 `.omo/evidence/plan/step11-scope-lock.md`，结论为 `execution_mode=BLOCKED`，需要本 active-docs unblock 后重新执行 implementation scope lock。
+- 范围：只授权 Step11 integration QA（集成质量验证）和为通过真实页面 QA 所必需的最小修复；必须覆盖 backend / frontend contract integration（后端 / 前端契约集成）、真实页面 feedback flow（反馈流程）、refresh recovery（刷新恢复）、signed next action（已签名下一步动作）、pending / partial / failure display（等待 / 部分 / 失败展示）、follow-up surface（追问操作面）和 integration regression matrix（集成回归矩阵）。
+- 必须处理的残余风险：复现、修复或分流 Step10 limited smoke failure；不得把该失败静默改写为通过。
+- 非目标：不进入 release（发布）、rollback（回滚）、production rollout（生产发布）、deployment config（部署配置）、migration（迁移）、dependency changes（依赖变更）或 Step12 release behavior（Step12 发布行为）；不新增 backend scoring / policy logic（后端评分 / 策略逻辑）；不新增 question generation（新题生成）、adaptive learning path（自适应学习路径）或 auto tutoring（自动辅导）；不关闭 C-049 到 C-054。
+- implementation scope lock 通过后候选允许路径：
+  - `apps/web/src/pages/interview/InterviewPage.tsx`
+  - `apps/web/src/pages/interview/InterviewPage.test.ts`
+  - `tests/web/test_interview_actions.py`
+  - `scripts/qa/polish-feedback-frontend-smoke.mjs`
+  - `tests/api/test_polish_api.py`
+  - `tests/api/test_polish_feedback_*.py`
+  - `apps/api/app/api/v1/polish.py`
+  - `apps/api/app/application/polish/**`
+  - `apps/api/app/schemas/polish.py`
+- 候选路径限制：后端候选路径只允许 response projection（响应投影）、failure envelope（失败响应信封）或 integration compatibility（集成兼容）最小修复；不得新增评分、策略、题目生成、迁移、配置或依赖。
+- 禁止修改路径：`apps/api/migrations/**`；配置文件；依赖文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`；release / rollback / deployment 文档。
+- 依赖：AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-BE-017；AIFI-FE-003；AIFI-FE-004。
+- 必需验证：
+  - 重新执行 Step11 implementation scope lock，并得到 `execution_mode=AUTHORIZED`、`implementation_allowed=true`。
+  - 运行或复现 Step10 limited smoke 命令，记录失败原因、修复结果或分流结论。
+  - 启动本地 app，通过真实浏览器驱动 interview/workbench 页面，保存截图或 action log 证据。
+  - 至少运行 `npm.cmd run web:test`、`python -m pytest -p no:cacheprovider tests/web/test_interview_actions.py -q`、focused backend regression（聚焦后端回归）、`npm.cmd run web:build` 和 `git diff --check`。
+  - implementation review-work 必须 PASS，且 safe_to_commit=yes 后才允许 implementation commit。
+- 对应 plan.md Step：Step 11，不包括 Step 12。
+- 对应 PRD AC / FR / BR：AC-012、AC-013、AC-014、AC-015；兼容 AC-001 到 AC-011 已完成后端和前端契约；FR-001、FR-019 到 FR-031、FR-052、FR-058 到 FR-064；BR-009 到 BR-024。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只做集成 QA、真实页面 QA 和必要最小修复，不定义相似度阈值、考察点绑定模型、最终 UI 形态、最终错误枚举、最终刷新恢复状态机或最终下一题算法。
+
 ### AIFI-REL-009 Feedback-loop release gate and rollback checklist
 
 - 背景：`.omo/plans/plan.md` Step 12 要求在实现完成后有明确 release gate、rollback checklist、QA evidence 和未满足项，避免把部分通过的 feedback-loop 声明为可发布。
@@ -401,9 +432,9 @@ Downstream handling：
 - 非目标：不改业务代码；不改测试代码；不创建新 roadmap 或并行计划入口；不把 `_bmad-output` 或 `.omo/plans` 变成 active docs。
 - 允许修改路径：`docs/03-implementation/**` 中 release checklist、runbook、QA evidence、test plan 类 active docs；必要时同步 `docs/00-governance/DOCS_INDEX.md` 中新增 active doc 登记。
 - 禁止修改路径：`apps/**`；`tests/**`；`apps/api/migrations/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
-- 依赖：AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008。
+- 依赖：AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-BE-017；AIFI-FE-003；AIFI-FE-004；AIFI-QA-005；AIFI-REL-008。
 - 验收标准：release gate 明确 PASS/FAIL 条件；rollback 和 degradation checklist 可执行；QA evidence 记录测试命令、结果和未覆盖风险；未完成项不会被写成 release-ready；如新增 active doc 已登记到 DOCS_INDEX。
-- 对应 plan.md Step：Step 11 中集成 evidence 汇总；Step 12。
+- 对应 plan.md Step：Step 12；消费 Step 11 / AIFI-QA-005 的集成 QA evidence（证据），不执行 Step11 实现。
 - 对应 PRD AC / FR / BR：AC-001 到 AC-015；NFR-001 到 NFR-008；BR-001 到 BR-024。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只登记 release gate 和回滚条件，不关闭任何 Deferred / Open Question；若后续要关闭，必须另走 active PRD / traceability / BACKLOG 决策入口。
 
