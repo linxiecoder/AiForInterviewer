@@ -79,7 +79,7 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-BE-012 | F5 | M5 | MUST | Same-answer stability and reference-answer replay | 实现同答案稳定评分、参考答案 replay 和评分归一化；Step4 closeout 已通过 | scoring/runtime 稳定性行为和回归 tests/api；Step4 commit `2e82dbfbc8f23d0c09cd784a94190dceecc36732` | AIFI-BE-010；AIFI-BE-011 | DONE |
 | AIFI-BE-015 | F5 | M5 | MUST | Improved-answer trend calibration and effective-result consistency | 实现改进回答后的评分趋势校准、current effective feedback result 一致性，以及 Step2/Step3/Step4 兼容；Step5 closeout 已通过并提交 | improvement trend / effective-result 行为和相关 tests/api；Step5 commit `ef95d4a9139d4c0f41593a6c9c57897d533aca0b` | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-QA-004 | DONE |
 | AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 已完成 progress mastery、score evolution、longitudinal feedback summary 和 stable user state projection；输出为 derived-only，不授权 Step7 question generation、next_question_recommendation、adaptive_learning_path、auto_tutoring 或 trend_autopilot | progress/use cases 一致性行为和 tests/api；Step6 commit `1bfa1cea0d213e01c00f20fda33971b68fac7996` | AIFI-BE-010；AIFI-BE-012；AIFI-BE-015 | DONE |
-| AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 仅允许重新执行 Step7 implementation authorization scope lock；后续 implementation 只可覆盖受 policy signature 约束的同节点追问、同节点下一题候选选择和 next action response contract，不授权泛化 question generation、open-ended generation、adaptive_learning_path、auto_tutoring、curriculum_generation、Step6 mastery autopilot 或重写 Step2-6 | implementation scope lock；后续可授权的 policy-signed same-node follow-up / next-question candidate contract 和相关 tests/api；不得关闭 C-049 / C-054 | AIFI-BE-013 | READY_TO_START |
+| AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 已完成受 policy signature（策略签名）约束的同节点追问、同节点下一题候选选择、next action / response contract（下一步动作 / 响应契约）和无签名 fail-closed（失败关闭）；不授权泛化 question generation、open-ended generation、adaptive_learning_path、auto_tutoring、curriculum_generation、Step6 mastery autopilot 或重写 Step2-6 | Step7 implementation commit `bad29f58389ddd1a0bb440af31c03139eee633f7`；policy-signed same-node follow-up / next-question contract metadata；`tests/domain/polish/test_follow_up_coverage_policy.py tests/api/test_polish_api.py -q` 结果为 `127 passed in 13.04s`；不得关闭 C-049 / C-054 | AIFI-BE-013 | DONE |
 | AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model、失败折叠和旧 payload 容错 | `entities/polish` view model/types/API 适配和 FE tests | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002 | NOT_STARTED |
 | AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
 | AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
@@ -314,20 +314,22 @@ Downstream handling：
 - final_status：DONE / CLOSED。
 - implementation commit：`1bfa1cea0d213e01c00f20fda33971b68fac7996`。
 - 当前授权边界：Step6 仅作为 Step7 的 read-only dependency；不得借 Step7 重写 Step6 progress mastery、manual completion、score evolution、longitudinal feedback summary 或 stable user state projection。
-- 下一步授权边界：只允许重新执行 Step7 implementation authorization scope lock；不直接授权 Step7 implementation。
+- 下一步授权边界：Step7 / AIFI-BE-014 已完成 closeout；后续 Step8、FE、migration、release 或 C-049 / C-054 关闭必须重新走 BACKLOG / traceability 授权。
 
 ### AIFI-BE-014 Follow-up and next-question behavior
 
-- 背景：`.omo/plans/plan.md` Step 7 只作为工程规划来源。当前 active 授权入口是 AIFI-BE-014；本状态只解锁重新执行 Step7 implementation authorization scope lock，不等于 implementation 已授权。
-- 当前范围：重新执行 Step7 implementation authorization scope lock。只有新的 scope lock 返回 `execution_mode=AUTHORIZED` 且 `implementation_allowed=true` 后，才可进入受 policy signature 约束的同节点追问、同节点下一题候选选择和 next action response contract 实现。
-- 后续可授权能力上限：`follow_up_intent_classification`；`same_node_follow_up_contract`；`same_node_next_question_candidate_selection`；`next_question_response_contract`；`policy_signed_next_action`；`no_auto_generation_without_policy_signature`。
+- 背景：`.omo/plans/plan.md` Step 7 只作为工程规划来源。active 授权入口是 AIFI-BE-014；本 closeout 只登记 Step7 已授权实现的完成结果，不改变 PRD 需求事实源。
+- final_status：DONE / CLOSED（已完成 / 已关闭）。
+- docs authorization commit：`a5ae5cd42567b78362bacf04c43e4a0994fb2774`（`docs(aifi): authorize step7 implementation scope`）。
+- implementation commit：`bad29f58389ddd1a0bb440af31c03139eee633f7`（`feat(aifi): close step7 follow-up policy`）。
+- scope lock 证据：Step7 implementation scope lock 曾生成 `execution_mode=AUTHORIZED`、`implementation_allowed=true`、`active_aifi=AIFI-BE-014`；根目录 JSON 已转存为 ignored evidence：`.omo/evidence/plan/step7-implementation-scope-lock-authorized.json`。旧 BLOCKED scope lock 保留在 `.omo/evidence/plan/step7-implementation-scope-lock-blocked.json`，不得作为授权依据。
+- 已完成能力：`follow_up_intent_classification`；`same_node_follow_up_contract`；`same_node_next_question_candidate_selection`；`next_question_response_contract`；`policy_signed_next_action`；`no_auto_generation_without_policy_signature`。
+- 实现结果：authorized feedback next-question metadata 会写入 `policy_signed_next_action`、`follow_up_intent_classification`、`same_node_follow_up_contract`、`same_node_next_question_contract`、`next_question_response_contract`；trusted metadata 校验会在缺失 policy signature、consumed grant 不满足、contract id 不匹配或 policy signature 不匹配时 fail-closed（失败关闭）并返回 `validation_failed`。
 - 非目标：不最终确定 C-049 相似度阈值；不最终确定或关闭 C-054 下一题算法；不实现后续阶段；不实现泛化 question generation、open-ended generation、cross-node uncontrolled generation、adaptive_learning_path、auto_tutoring 或 curriculum_generation；不重写 Step2 到 Step6。
-- 当前允许修改路径：`step7_implementation_scope_lock.json`；`.omo/evidence/plan/step7-implementation-scope-lock.md`；`.omo/ulw-loop/**` evidence / ledger 记录。
-- 后续实现路径上限：若且仅若新 scope lock 授权，才可触碰 `apps/api/app/application/polish/**` 中 Step7 policy-signed same-node follow-up / next-question candidate contract 相关文件、`apps/api/app/api/v1/polish.py` 中与现有 polish API envelope 兼容的最小调整，以及相关 `tests/api/test_polish_question*.py`、`tests/api/test_polish_followup*.py`、`tests/api/test_polish_api.py`。
+- 完成修改路径：`apps/api/app/application/polish/use_cases.py`；`apps/api/app/application/polish/question_metadata.py`；`tests/api/test_polish_api.py`。
 - 禁止修改路径：`apps/api/migrations/**`；`apps/web/**`；非 polish 后端模块；配置文件；依赖文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
 - 依赖：AIFI-BE-013；AIFI-BE-010；AIFI-QA-004。
-- scope-lock 验收标准：输出必须明确 `active_aifi=AIFI-BE-014`、`implementation_allowed=true`、`execution_mode=AUTHORIZED`、allowed / forbidden capabilities、allowed / forbidden paths、immutable Step2 到 Step6 dependencies，以及 review requirements。
-- 后续实现验收标准上限：follow-up 和 next-question 必须使用有效 feedback/progress 和 policy signature；无 policy signature 不得生成 next action；manual completion 后不得生成冲突追问；API envelope 与旧调用兼容；相关 tests/api 通过。
+- 验收证据：`PYTHONPATH=.:apps/api PYTHONDONTWRITEBYTECODE=1 python -m py_compile apps/api/app/application/polish/use_cases.py apps/api/app/application/polish/question_metadata.py apps/api/app/api/v1/polish.py apps/api/app/domain/polish/policies/follow_up_coverage_policy.py` 通过；focused Step7 API tests 结果为 `9 passed in 4.53s`；`PYTHONPATH=.:apps/api PYTHONDONTWRITEBYTECODE=1 python -m pytest -p no:cacheprovider tests/domain/polish/test_follow_up_coverage_policy.py tests/api/test_polish_api.py -q` 结果为 `127 passed in 13.04s`；`git diff --check` 通过；forbidden path diff 为空。
 - 对应 plan.md Step：Step 7；后续 envelope 兼容来源不扩大本任务授权。
 - 对应 PRD AC / FR / BR：AC-009、AC-010、AC-011、AC-014；FR-019 到 FR-023、FR-032 到 FR-038、FR-048 到 FR-057；BR-011 到 BR-014、BR-024。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只建立保守行为和测试护栏，不把 C-049 阈值或 C-054 算法标记为最终决策。
