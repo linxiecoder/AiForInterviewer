@@ -87,6 +87,7 @@ import {
   buildSelectedAnswerFeedbackMetaViewModel,
   buildFeedbackRoundMetaLabel,
   buildWorkbenchCandidateActionBarViewModel,
+  buildWorkbenchFeedbackActionSurfaceViewModel,
   buildWorkbenchFixedNextActionBarViewModel,
   mapFeedbackCodeToDisplay,
   buildPolishSessionReportDialogViewModel,
@@ -3403,6 +3404,55 @@ function test_workbench_next_action_recommendations_are_display_only(): void {
   assertContract(toNextRecommendedActionLabel("open_magic_panel") === "open_magic_panel", "未知 action 只能原样展示，不绑定执行");
 }
 
+function test_workbench_action_surface_follows_selected_feedback_after_refresh(): void {
+  const selectedAnswer = buildQuestionAnswer({
+    answer_id: "ans_selected_feedback",
+    feedback_id: "fb_selected_feedback",
+    feedback_payload: {
+      status: "generated",
+      feedback_id: "fb_selected_feedback",
+      next_recommended_actions: ["provide_more_answer_detail"],
+    },
+  });
+  const latestAnswer = buildQuestionAnswer({
+    answer_id: "ans_latest_feedback",
+    feedback_id: "fb_latest_feedback",
+    feedback_payload: {
+      status: "generated",
+      feedback_id: "fb_latest_feedback",
+      next_recommended_actions: ["continue_same_question"],
+    },
+  });
+
+  const selectedSurface = buildWorkbenchFeedbackActionSurfaceViewModel({
+    selectedAnswer,
+    selectedAnswerProgressNodeRef: "node_selected_feedback",
+    focusedQuestionLatestAnswer: latestAnswer,
+    focusedQuestionProgressNodeRef: "node_latest_feedback",
+    selectedProgressNodeDetailRef: "node_fallback",
+  });
+  const fallbackSurface = buildWorkbenchFeedbackActionSurfaceViewModel({
+    selectedAnswer: null,
+    selectedAnswerProgressNodeRef: null,
+    focusedQuestionLatestAnswer: latestAnswer,
+    focusedQuestionProgressNodeRef: "node_latest_feedback",
+    selectedProgressNodeDetailRef: "node_fallback",
+  });
+
+  assertContract(selectedSurface.answerId === "ans_selected_feedback", "刷新恢复后动作面应绑定用户当前选中的反馈回答");
+  assertContract(selectedSurface.feedbackId === "fb_selected_feedback", "生成下一题入口应使用当前选中反馈的 feedback_id");
+  assertContract(selectedSurface.progressNodeRef === "node_selected_feedback", "动作面应保留选中反馈所属节点，不能误绑最新题目节点");
+  assertContract(
+    selectedSurface.fixedNextActionBar?.actions.map((item) => item.action).join(",") === "provide_more_answer_detail",
+    "固定动作条应展示选中反馈的 signed next action，而不是最新回答的 action",
+  );
+  assertContract(fallbackSurface.answerId === "ans_latest_feedback", "没有显式选中反馈时可回退到当前题目最新回答");
+  assertContract(
+    fallbackSurface.fixedNextActionBar?.actions.map((item) => item.action).join(",") === "continue_same_question",
+    "回退路径仍应消费当前题目最新回答的 Step9 view model",
+  );
+}
+
 function test_workbench_candidate_actions_render_in_fixed_composer_bar(): void {
   const review = buildCandidateReviewViewModel([
     {
@@ -4613,6 +4663,7 @@ test_feedback_generation_idempotency_key_is_stable_per_answer();
 test_polish_question_generation_request_payload_is_intent_only();
 test_workbench_next_actions_render_in_fixed_composer_bar();
 test_workbench_next_action_recommendations_are_display_only();
+test_workbench_action_surface_follows_selected_feedback_after_refresh();
 test_workbench_candidate_actions_render_in_fixed_composer_bar();
 test_workbench_round_labels_use_compact_meta_pills();
 test_waiting_answer_bar_is_removed_from_workbench_contract();

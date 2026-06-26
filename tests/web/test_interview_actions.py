@@ -227,6 +227,150 @@ assertScenario(!visibleCopy.includes("当前回答暂无总评内容"), "summary
     assert result.returncode == 0, result.stderr
 
 
+def _assert_workbench_feedback_action_surface_scenario() -> None:
+    script = r"""
+const ts = require("typescript");
+const Module = require("node:module");
+
+function assertScenario(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function compileTypeScript(module, filename) {
+  const source = require("node:fs").readFileSync(filename, "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  module._compile(output.outputText, filename);
+}
+
+require.extensions[".ts"] = compileTypeScript;
+require.extensions[".tsx"] = compileTypeScript;
+require.extensions[".css"] = function compileCssModule(module) {
+  module.exports = new Proxy({}, {
+    get: (_target, property) => String(property),
+  });
+};
+
+const originalLoad = Module._load;
+Module._load = function loadPageDependency(request, parent, isMain) {
+  if (request.includes("entities/job/api/jobApi") || request.includes("entities/polish/api/polishApi")) {
+    return new Proxy({}, {
+      get: (_target, property) => {
+        if (property === "__esModule") {
+          return true;
+        }
+        return function noopApiDependency() {
+          throw new Error(`Unexpected API dependency call: ${String(property)}`);
+        };
+      },
+    });
+  }
+  if (request.includes("app/routes/router")) {
+    return {
+      useRouteController: () => ({
+        navigate: () => undefined,
+        params: {},
+      }),
+    };
+  }
+  if (request.includes("shared/api/errors")) {
+    return { isApiHttpError: () => false };
+  }
+  if (
+    request.includes("shared/ui/EmptyState") ||
+    request.includes("shared/ui/ErrorState") ||
+    request.includes("shared/ui/LoadingState") ||
+    request.includes("widgets/app-shell/AppShell")
+  ) {
+    return new Proxy({}, {
+      get: (_target, property) => function noopComponent() {
+        return property === "AppShell" ? null : null;
+      },
+    });
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+
+const {
+  buildWorkbenchFeedbackActionSurfaceViewModel,
+} = require("./apps/web/src/pages/interview/InterviewPage.tsx");
+
+const selectedAnswer = {
+  answer_id: "ans_selected_feedback",
+  answer_round: 1,
+  answer_text: "Selected answer should control the feedback action surface",
+  feedback_id: "fb_selected_feedback",
+  feedback_created_at: "2026-06-26T00:00:00Z",
+  feedback_text: "Selected feedback",
+  score_result_id: null,
+  feedback_payload: {
+    status: "generated",
+    feedback_id: "fb_selected_feedback",
+    next_recommended_actions: ["provide_more_answer_detail"],
+  },
+};
+const latestAnswer = {
+  answer_id: "ans_latest_feedback",
+  answer_round: 2,
+  answer_text: "Latest focused answer is only the fallback",
+  feedback_id: "fb_latest_feedback",
+  feedback_created_at: "2026-06-26T00:00:00Z",
+  feedback_text: "Latest feedback",
+  score_result_id: null,
+  feedback_payload: {
+    status: "generated",
+    feedback_id: "fb_latest_feedback",
+    next_recommended_actions: ["continue_same_question"],
+  },
+};
+
+const selectedSurface = buildWorkbenchFeedbackActionSurfaceViewModel({
+  selectedAnswer,
+  selectedAnswerProgressNodeRef: "node_selected_feedback",
+  focusedQuestionLatestAnswer: latestAnswer,
+  focusedQuestionProgressNodeRef: "node_latest_feedback",
+  selectedProgressNodeDetailRef: "node_fallback",
+});
+const fallbackSurface = buildWorkbenchFeedbackActionSurfaceViewModel({
+  selectedAnswer: null,
+  selectedAnswerProgressNodeRef: null,
+  focusedQuestionLatestAnswer: latestAnswer,
+  focusedQuestionProgressNodeRef: "node_latest_feedback",
+  selectedProgressNodeDetailRef: "node_fallback",
+});
+
+assertScenario(selectedSurface.answerId === "ans_selected_feedback", "selected feedback answer must control action surface");
+assertScenario(selectedSurface.feedbackId === "fb_selected_feedback", "selected feedback id must drive next-question action");
+assertScenario(selectedSurface.progressNodeRef === "node_selected_feedback", "selected feedback node must be preserved");
+assertScenario(
+  selectedSurface.fixedNextActionBar?.actions.map((item) => item.action).join(",") === "provide_more_answer_detail",
+  "selected feedback action bar must not fall back to the latest answer",
+);
+assertScenario(fallbackSurface.answerId === "ans_latest_feedback", "focused latest answer remains fallback");
+assertScenario(
+  fallbackSurface.fixedNextActionBar?.actions.map((item) => item.action).join(",") === "continue_same_question",
+  "fallback action bar must use focused latest answer",
+);
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        cwd=REPO_ROOT,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_interview_workbench_end_uses_system_modal_not_native_dialog() -> None:
     source = _source(INTERVIEW_PAGE)
 
@@ -430,6 +574,10 @@ def test_interview_workbench_feedback_timeout_reloads_terminal_feedback_payload(
 
 def test_interview_workbench_failed_feedback_summary_sections_include_failed_status_copy() -> None:
     _assert_failed_feedback_summary_sections_scenario()
+
+
+def test_interview_workbench_action_surface_follows_selected_feedback_after_refresh() -> None:
+    _assert_workbench_feedback_action_surface_scenario()
 
 
 def test_interview_workbench_has_no_grant_client_fields() -> None:

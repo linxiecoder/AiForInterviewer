@@ -3357,6 +3357,32 @@ export function buildWorkbenchCandidateActionBarViewModel(
   };
 }
 
+export type WorkbenchFeedbackActionSurfaceViewModel = {
+  readonly answerId: string | null;
+  readonly feedbackId: string | null;
+  readonly progressNodeRef: string | null;
+  readonly fixedNextActionBar: WorkbenchFixedNextActionBarViewModel | null;
+};
+
+export function buildWorkbenchFeedbackActionSurfaceViewModel(params: {
+  readonly selectedAnswer: PolishSessionAnswer | null;
+  readonly selectedAnswerProgressNodeRef: string | null;
+  readonly focusedQuestionLatestAnswer: PolishSessionAnswer | null;
+  readonly focusedQuestionProgressNodeRef: string | null;
+  readonly selectedProgressNodeDetailRef: string | null;
+}): WorkbenchFeedbackActionSurfaceViewModel {
+  const actionAnswer = params.selectedAnswer ?? params.focusedQuestionLatestAnswer;
+  const progressNodeRef = params.selectedAnswer !== null
+    ? params.selectedAnswerProgressNodeRef ?? params.focusedQuestionProgressNodeRef ?? params.selectedProgressNodeDetailRef
+    : params.focusedQuestionProgressNodeRef ?? params.selectedProgressNodeDetailRef;
+  return {
+    answerId: actionAnswer?.answer_id ?? null,
+    feedbackId: getPolishFeedbackPayloadId(actionAnswer),
+    progressNodeRef,
+    fixedNextActionBar: buildWorkbenchFixedNextActionBarViewModel(actionAnswer),
+  };
+}
+
 export function buildFeedbackPanelTabs(params: {
   hasSummary: boolean;
   hasLossPoints: boolean;
@@ -4842,11 +4868,20 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
   const selectedAnswerContext = findSelectedAnswerContext(session, selectedAnswerId);
   const selectedAnswerFeedbackMeta = buildSelectedAnswerFeedbackMetaViewModel(session, selectedAnswerId);
   const selectedAnswer = selectedAnswerContext?.answer ?? null;
+  const selectedAnswerProgressNodeRef = selectedAnswerContext?.turn.progress_node_ref ?? null;
   const selectedAnswerFeedbackCard = selectedAnswer === null ? null : buildFeedbackCardViewModel(selectedAnswer);
-  const fixedNextActionBar = buildWorkbenchFixedNextActionBarViewModel(focusedQuestionLatestAnswer);
-  const fixedNextActionProgressNodeRef = focusedQuestionTurn?.progress_node_ref ?? selectedProgressNodeDetailRef;
+  const feedbackActionSurface = buildWorkbenchFeedbackActionSurfaceViewModel({
+    selectedAnswer,
+    selectedAnswerProgressNodeRef,
+    focusedQuestionLatestAnswer,
+    focusedQuestionProgressNodeRef: focusedQuestionTurn?.progress_node_ref ?? null,
+    selectedProgressNodeDetailRef,
+  });
+  const fixedNextActionBar = feedbackActionSurface.fixedNextActionBar;
+  const fixedNextActionProgressNodeRef = feedbackActionSurface.progressNodeRef;
+  const activeFeedbackActionFeedbackId = feedbackActionSurface.feedbackId;
   const canCreateFeedbackNextQuestion = Boolean(
-    focusedQuestionLatestFeedbackId &&
+    activeFeedbackActionFeedbackId &&
       !isSessionEnded &&
       !creatingQuestion &&
       !submittingAnswer &&
@@ -5742,11 +5777,11 @@ export function InterviewWorkbenchPage({ sessionId }: { sessionId: string }) {
             void createCurrentNodeQuestion(selectedProgressNodeDetailRef);
             return;
           }
-          if (focusedQuestionLatestFeedbackId === null) {
+          if (activeFeedbackActionFeedbackId === null) {
             setAnswerError("当前题目还没有可授权的反馈，无法生成下一题。");
             return;
           }
-          void createFeedbackNextQuestion(focusedQuestionLatestFeedbackId, fixedNextActionProgressNodeRef);
+          void createFeedbackNextQuestion(activeFeedbackActionFeedbackId, fixedNextActionProgressNodeRef);
         }}
         onCompleteCurrentQuestion={() => {
           void completeCurrentQuestion();
