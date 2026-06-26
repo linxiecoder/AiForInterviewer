@@ -1,4 +1,8 @@
 import type { PolishFeedbackPayload, PolishSessionAnswer, PolishSessionDetail } from "./types";
+import {
+  buildFeedbackResponseContractProjection,
+  type FeedbackResponseContractViewModel,
+} from "./feedbackResponseContractViewModel";
 import { buildFailedFeedbackSection, buildGeneratedFeedbackSections } from "./feedbackCardSections";
 import {
   getAnswerNextRecommendedActions,
@@ -11,6 +15,13 @@ import type {
   FeedbackCardViewModel,
   WorkbenchFixedNextActionBarViewModel,
 } from "./feedbackViewModelTypes";
+
+export type {
+  FeedbackPolicySignedNextActionViewModel,
+  FeedbackProgressProjectionViewModel,
+  FeedbackResponseContractItemViewModel,
+  FeedbackResponseContractViewModel,
+} from "./feedbackResponseContractViewModel";
 
 export type {
   FeedbackCardSectionViewModel,
@@ -76,6 +87,10 @@ export function buildFeedbackCardViewModel(answer: PolishSessionAnswer): Feedbac
     nextActions: getAnswerNextRecommendedActions(answer),
     traceItems: [],
   };
+}
+
+export function buildFeedbackResponseContractViewModel(answer: PolishSessionAnswer): FeedbackResponseContractViewModel {
+  return buildFeedbackResponseContractProjection(answer, buildFeedbackCardViewModel(answer));
 }
 
 export interface FeedbackTimeoutRefreshViewModel {
