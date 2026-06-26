@@ -345,7 +345,7 @@ Downstream handling：
 - 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004。
 - 验收标准：response envelope / schema 变更必须 additive 且 backwards-compatible；`candidate_refs`、`suggestion_refs`、`validation_errors`、generated / partial / failure / pending 语义保持稳定；旧 payload 可安全投影；failure response 不暴露 raw prompt、raw completion、provider payload 或 secret；signed next action 保持 policy signature 约束；相关 backend contract tests 通过。
 - 实现结果：`policy_signed_next_action`、`follow_up_intent_classification`、`same_node_follow_up_contract`、`same_node_next_question_contract`、`next_question_response_contract` 已作为 response-only metadata（仅响应元数据）进入 `feedback_payload` response projection 和 `PolishFeedbackPayload` schema；未进入 `FeedbackFinalPayload` required-final-field 契约源。
-- 验收证据：implementation commit `23990da79118d200024735f193ba9b5d4499d4a2`；focused Step8 tests 结果为 `3 passed in 2.88s`；backend regression suite 结果为 `211 passed in 22.91s`，仅伴随 Windows pytest 临时目录清理 warnings；`py_compile` 通过；`git diff --check` 通过；forbidden path diff 为空。
+- 验收证据：implementation commit `23990da79118d200024735f193ba9b5d4499d4a2`；supplemental focused test commit `d79a91555ca2ff578f77a84ac6e3740fa2209d8e`；focused Step8 tests 结果为 `3 passed in 1.63s`；Step8 / Step2-7 / API canary bundle 结果为 `279 passed in 26.48s`；full `tests/api` canary 结果为 `1052 passed, 1 skipped, 1 warning in 108.92s`；测试通过时伴随 Windows pytest 临时目录清理 warnings；`py_compile` 通过；`git diff --check` 通过；forbidden path diff 为空。
 - 对应 plan.md Step：Step 8：API schema 与 response envelope 汇总。
 - 对应 PRD AC / FR / BR：承接 Step2 到 Step7 已完成后端 contract 的 API schema 汇总；不新增业务决策，不关闭 Deferred C-ID。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只汇总后端 response contract，不决定相似度阈值、考察点与题目绑定模型、失败记录折叠最终样式、错误枚举最终映射、刷新恢复状态机或下一题算法。
