@@ -80,6 +80,7 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-BE-015 | F5 | M5 | MUST | Improved-answer trend calibration and effective-result consistency | 实现改进回答后的评分趋势校准、current effective feedback result 一致性，以及 Step2/Step3/Step4 兼容；Step5 closeout 已通过并提交 | improvement trend / effective-result 行为和相关 tests/api；Step5 commit `ef95d4a9139d4c0f41593a6c9c57897d533aca0b` | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-QA-004 | DONE |
 | AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 已完成 progress mastery、score evolution、longitudinal feedback summary 和 stable user state projection；输出为 derived-only，不授权 Step7 question generation、next_question_recommendation、adaptive_learning_path、auto_tutoring 或 trend_autopilot | progress/use cases 一致性行为和 tests/api；Step6 commit `1bfa1cea0d213e01c00f20fda33971b68fac7996` | AIFI-BE-010；AIFI-BE-012；AIFI-BE-015 | DONE |
 | AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 已完成受 policy signature（策略签名）约束的同节点追问、同节点下一题候选选择、next action / response contract（下一步动作 / 响应契约）和无签名 fail-closed（失败关闭）；不授权泛化 question generation、open-ended generation、adaptive_learning_path、auto_tutoring、curriculum_generation、Step6 mastery autopilot 或重写 Step2-6 | Step7 implementation commit `bad29f58389ddd1a0bb440af31c03139eee633f7`；policy-signed same-node follow-up / next-question contract metadata；`tests/domain/polish/test_follow_up_coverage_policy.py tests/api/test_polish_api.py -q` 结果为 `127 passed in 13.04s`；不得关闭 C-049 / C-054 | AIFI-BE-013 | DONE |
+| AIFI-BE-017 | F5 | M5 | MUST | API schema and response envelope boundary | 只授权 Step8 后端 API response schema、payload envelope、signed action / feedback / progress / follow-up outputs 的兼容汇总；不改变 Step2-7 业务决策，不授权 FE、migration、release、Step9-12 或 C-049 到 C-054 关闭 | API response envelope / response contract schema、backwards-compatible projection、backend contract tests；Step8 implementation scope lock evidence | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004 | READY_TO_START |
 | AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model、失败折叠和旧 payload 容错 | `entities/polish` view model/types/API 适配和 FE tests | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002 | NOT_STARTED |
 | AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
 | AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
@@ -334,6 +335,20 @@ Downstream handling：
 - 对应 PRD AC / FR / BR：AC-009、AC-010、AC-011、AC-014；FR-019 到 FR-023、FR-032 到 FR-038、FR-048 到 FR-057；BR-011 到 BR-014、BR-024。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务只建立保守行为和测试护栏，不把 C-049 阈值或 C-054 算法标记为最终决策。
 
+### AIFI-BE-017 API schema and response envelope boundary
+
+- 背景：Step8 initial scope lock 已确认 active docs 缺少唯一 canonical backend API response envelope AIFI；本任务只补齐 Step8 后端 API schema / response envelope 汇总入口，并仅授权后续重新执行 Step8 implementation scope lock。
+- 范围：API response envelope consolidation、feedback / progress / follow-up / signed_next_action payload schema alignment、effective feedback response contract、failure response contract、backwards-compatible API projection 和 backend contract tests。
+- 非目标：不实现 FE view model、FE rendering、workbench interaction、integration QA、release、migration、配置或依赖改动；不新增 scoring、fail-closed、replay、trend、progress mastery、follow-up policy 或 question generation 业务逻辑；不授权 Step9、Step10、Step11 或 Step12；不关闭 C-049 到 C-054。
+- 允许修改路径候选：`apps/api/app/application/polish/feedback_models.py`；`apps/api/app/application/polish/feedback_projection.py`；`apps/api/app/application/polish/feedback_application_service.py`；`apps/api/app/application/polish/use_cases.py`；`apps/api/app/application/polish/api_response_envelope.py`；`apps/api/app/application/polish/response_contracts.py`；`tests/api/test_polish_api_response_envelope.py`；`tests/api/test_polish_response_contracts.py`；`tests/api/test_polish_complete_question_flow.py`；必要的 `tests/api/test_polish_*feedback*.py`。最终允许路径以 Step8 implementation scope lock 的 `execution_mode=AUTHORIZED` 证据为准。
+- 禁止修改路径：`apps/web/**`；`apps/api/migrations/**`；implementation 阶段的 `docs/**`；`.omo/plans/**`；`archive/**`；`_bmad-output/**`；配置文件；依赖文件。
+- 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004。
+- 验收标准：response envelope / schema 变更必须 additive 且 backwards-compatible；`candidate_refs`、`suggestion_refs`、`validation_errors`、generated / partial / failure / pending 语义保持稳定；旧 payload 可安全投影；failure response 不暴露 raw prompt、raw completion、provider payload 或 secret；signed next action 保持 policy signature 约束；相关 backend contract tests 通过。
+- 对应 plan.md Step：Step 8：API schema 与 response envelope 汇总。
+- 对应 PRD AC / FR / BR：承接 Step2 到 Step7 已完成后端 contract 的 API schema 汇总；不新增业务决策，不关闭 Deferred C-ID。
+- C-049 到 C-054 是否仍保持 Deferred：是。该任务只汇总后端 response contract，不决定相似度阈值、考察点与题目绑定模型、失败记录折叠最终样式、错误枚举最终映射、刷新恢复状态机或下一题算法。
+- 当前状态：READY_TO_START。implementation_allowed=false，直到 Step8 implementation scope lock 生成 `execution_mode=AUTHORIZED`、`active_aifi=AIFI-BE-017`、`implementation_allowed=true` 的证据。
+
 ### AIFI-FE-003 Feedback view model and failure folding
 
 - 背景：`.omo/plans/plan.md` Step 9 要求前端先在 `entities/polish` 层把 feedback payload、有效状态、失败折叠和旧 payload 容错统一为 view model，再交给页面呈现。
@@ -343,7 +358,7 @@ Downstream handling：
 - 禁止修改路径：`apps/web/src/pages/interview/InterviewPage.tsx`；`apps/api/**`；`tests/api/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
 - 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002；AIFI-QA-004。
 - 验收标准：view model 对旧 payload 和失败 payload 有稳定输出；缺失字段不导致渲染异常；错误折叠不会伪装为成功 feedback；相关 FE tests 或 typecheck 覆盖核心转换。
-- 对应 plan.md Step：Step 8 中前端 schema/type 适配；Step 9。
+- 对应 plan.md Step：Step 9。Step 8 backend schema / response envelope 已由 AIFI-BE-017 承接；本任务不授权 Step8 implementation。
 - 对应 PRD AC / FR / BR：AC-012、AC-013、AC-015；FR-002 到 FR-005、FR-008 到 FR-010、FR-023 到 FR-031、FR-060 到 FR-064；BR-009、BR-010、BR-021、BR-023。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务不决定最终 UI 形态或刷新恢复状态机，只提供可兼容的数据视图模型。
 
