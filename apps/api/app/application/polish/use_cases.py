@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from hashlib import sha256
-from typing import Any
+from typing import Any, Final
 
 from app.application.common.logging import LogUtil
 from app.application.common.result import ApplicationResult
@@ -178,6 +178,27 @@ UNNAMED_COMPANY_TITLE = "未命名公司"
 UNNAMED_QUESTION_TEXT = "题干缺失"
 UNNAMED_ANSWER_TEXT = "暂无回答"
 UNNAMED_FEEDBACK_TEXT = "本轮反馈尚未生成"
+SESSION_DETAIL_VISIBLE_FEEDBACK_PAYLOAD_STATUSES: Final = frozenset(
+    {
+        "generated",
+        AiTaskStatus.PARTIAL.value,
+        AiTaskStatus.LOW_CONFIDENCE.value,
+        AiTaskStatus.VALIDATION_FAILED.value,
+        AiTaskStatus.SOURCE_UNAVAILABLE.value,
+        AiTaskStatus.GENERATION_FAILED.value,
+        AiTaskStatus.TIMED_OUT.value,
+        AiTaskStatus.CANCELLED.value,
+    }
+)
+SESSION_DETAIL_VISIBLE_FAILED_FEEDBACK_STATUSES: Final = frozenset(
+    {
+        AiTaskStatus.VALIDATION_FAILED.value,
+        AiTaskStatus.SOURCE_UNAVAILABLE.value,
+        AiTaskStatus.GENERATION_FAILED.value,
+        AiTaskStatus.TIMED_OUT.value,
+        AiTaskStatus.CANCELLED.value,
+    }
+)
 
 
 def _stale_session_version_error(exc: PolishSessionVersionConflictError) -> DomainError:
@@ -1353,7 +1374,7 @@ class _PolishUseCaseOperations:
         answers = self._polish_repository.list_answers_for_session(owner_id=owner_id, session_id=session_id)
         feedbacks = self._polish_repository.list_feedbacks_for_session(owner_id=owner_id, session_id=session_id)
 
-        feedback_map = _latest_feedback_by_answer_id(feedbacks)
+        feedback_map = _latest_session_detail_feedback_by_answer_id(feedbacks)
         answers_by_question: dict[str, list[PolishSessionAnswerDetail]] = {}
         for answer in answers:
             answers_by_question.setdefault(answer.question_id, []).append(
@@ -3570,6 +3591,41 @@ def _latest_feedback_by_answer_id(
         ):
             latest_by_answer_id[feedback.answer_id] = feedback
     return latest_by_answer_id
+
+
+def _latest_session_detail_feedback_by_answer_id(
+    feedbacks: tuple[PolishFeedback, ...],
+) -> dict[str, PolishFeedback]:
+    latest_by_answer_id: dict[str, PolishFeedback] = {}
+    for feedback in feedbacks:
+        if not _is_session_detail_visible_feedback(feedback):
+            continue
+        current = latest_by_answer_id.get(feedback.answer_id)
+        if (
+            current is None
+            or (feedback.created_at, feedback.feedback_id) > (current.created_at, current.feedback_id)
+        ):
+            latest_by_answer_id[feedback.answer_id] = feedback
+    return latest_by_answer_id
+
+
+def _is_session_detail_visible_feedback(feedback: PolishFeedback) -> bool:
+    if _is_effective_feedback(feedback):
+        return True
+
+    payload = _feedback_payload_from_summary(feedback.feedback_summary)
+    if payload is None:
+        return False
+    payload_status = payload.get("status")
+    if not isinstance(payload_status, str):
+        return False
+    if payload_status not in SESSION_DETAIL_VISIBLE_FEEDBACK_PAYLOAD_STATUSES:
+        return False
+    if feedback.status in SESSION_DETAIL_VISIBLE_FAILED_FEEDBACK_STATUSES:
+        return payload_status == feedback.status and feedback_text_from_payload(payload) is not None
+    if feedback.status == "generated":
+        return feedback_text_from_payload(payload) is not None
+    return False
 
 
 def _is_effective_feedback(feedback: PolishFeedback) -> bool:

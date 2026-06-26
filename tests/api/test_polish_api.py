@@ -3525,6 +3525,89 @@ def test_get_polish_session_does_not_regenerate_progress_tree() -> None:
     assert transport.calls == []
 
 
+def test_get_polish_session_exposes_generation_failed_feedback_payload() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(session_factory, ACTOR_A)
+    session_id, question_id = _create_polish_session_with_seed_question(
+        app,
+        session_factory,
+        binding_id,
+        question_id="que_failed_feedback_session_detail",
+    )
+    answer_status, answer_body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{session_id}/answers",
+        "POST",
+        json_body={
+            "question_id": question_id,
+            "answer_text": "我会说明失败处理、重试策略和验证指标。",
+        },
+    )
+    assert answer_status == 201
+    answer_id = answer_body["data"]["answer_id"]
+    feedback_id = "fb_generation_failed_session_detail"
+    failure_payload = {
+        "schema_id": "polish_feedback.final.v1",
+        "schema_version": "1.0",
+        "contract_ids": ["P-POLISH-005"],
+        "status": "generation_failed",
+        "feedback_id": feedback_id,
+        "feedback_text": "反馈生成失败，请稍后重试。",
+        "answer_summary": None,
+        "score_result": None,
+        "loss_points": [],
+        "reference_answer": None,
+        "next_recommended_actions": ["retry_same_question", "continue_same_question"],
+        "trace_refs": [{"resource_type": "feedback", "resource_id": feedback_id}],
+        "low_confidence_flags": [],
+        "retryable": True,
+        "user_visible_status": "generation_failed",
+        "validation_errors": ["llm_transport_generation_failed"],
+        "error": {
+            "code": "llm_transport_generation_failed",
+            "message": "反馈生成失败，请稍后重试。",
+        },
+        "feedback_metadata": {
+            "llm_called": True,
+            "provider_status": "transport_failed",
+        },
+    }
+    now = utc_now()
+    SqlAlchemyPolishRepository(session_factory).add_feedback(
+        PolishFeedback(
+            feedback_id=feedback_id,
+            owner_id=OWNER_A,
+            actor_id=ACTOR_A.actor_id,
+            session_id=session_id,
+            answer_id=answer_id,
+            ai_task_id=f"ait_{feedback_id}",
+            score_result_id=None,
+            feedback_summary=json.dumps(failure_payload, ensure_ascii=False, sort_keys=True),
+            status="generation_failed",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    detail_status, detail_body = call_json(app, f"/api/v1/polish-sessions/{session_id}")
+
+    assert detail_status == 200
+    answer_details = [
+        answer
+        for turn in detail_body["data"]["turns"]
+        for answer in turn["answers"]
+        if answer["answer_id"] == answer_id
+    ]
+    assert len(answer_details) == 1
+    feedback_payload = answer_details[0]["feedback_payload"]
+    assert answer_details[0]["feedback_id"] == feedback_id
+    assert feedback_payload["status"] == "generation_failed"
+    assert feedback_payload["retryable"] is True
+    assert feedback_payload["validation_errors"] == ["llm_transport_generation_failed"]
+    assert "provider_payload" not in _collect_keys(feedback_payload)
+
+
 def test_polish_answer_duplicate_same_key_replays_same_answer_without_second_row() -> None:
     session_factory = _session_factory()
     binding_id = _seed_polish_sources(session_factory, OWNER_A)
