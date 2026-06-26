@@ -829,6 +829,28 @@ C-049 到 C-054 仍保持 `Deferred / Open Question`。AIFI-QA-005 只可承接 
 | non-blocking risks | mobile 375 截图主要依赖 DOM 文本检查；action log 有 404 console error 和 Ant Design deprecated warning；Vite build 保留 chunk size warning；LSP diagnostics MCP 返回 `Transport closed` |
 | 不授权 | Step12 release / rollback；migration；config；dependency changes；新评分 / 策略逻辑；新题生成；关闭 C-049 到 C-054 |
 
+### 5.15 Step 12 / AIFI-REL-008 依赖解锁状态登记
+
+本节登记 Step12 scope lock 发现的 AIFI-REL-008 阻断项处理结果。该登记只解除 AIFI-REL-009 重新执行 implementation scope lock 的 active-docs 前置阻断，不声明 release-ready，不执行 release（发布）、rollback（回滚）、production rollout（生产发布）、migration（迁移）、config（配置）或 dependency changes（依赖变更），也不改变 PRD 需求事实源。
+
+| 项 | 内容 |
+|---|---|
+| 触发证据 | `.omo/evidence/plan/step12-scope-lock.md`，结果为 `execution_mode=BLOCKED`，阻断原因为 AIFI-REL-008 仍是 `NOT_STARTED` |
+| 处理任务 | AIFI-REL-008 Feedback rollback and degradation gate plan |
+| closeout 分类 | VALID_REQUIRED_WORK；本轮只做 docs/evidence/checklist-only 收口 |
+| closeout 状态 | DONE / CLOSED；`BACKLOG.md` 中 AIFI-REL-008 已从 `NOT_STARTED` 更新为 `DONE` |
+| 依赖语义 | AIFI-PROD-011 为直接来源；AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002 在本 docs/evidence/checklist-only closeout 中降级为参考上下文、非硬依赖 |
+| 替代证据 | AIFI-QA-004、AIFI-BE-010、AIFI-BE-011、AIFI-BE-012、AIFI-BE-015、AIFI-BE-013、AIFI-BE-014、AIFI-BE-017、AIFI-FE-003、AIFI-FE-004、AIFI-QA-005 的已完成实现 / QA closeout，以及本节登记的 release gate 待验证项 |
+| closeout evidence | `.omo/evidence/plan/aifi-rel-008-dependency-closeout.md`；`.omo/evidence/plan/step12-active-docs-unblock.md` |
+| AIFI-REL-009 状态 | READY_TO_START；只允许重新执行 Step12 implementation scope lock，不表示 release docs 已完成 |
+| release / rollback 边界 | 不命名真实 env var；不写部署脚本；不执行回滚或降级；不修改 runtime、migration、config、dependency 或业务 / 测试代码 |
+| Step11 residual risk 分类 | mobile DOM 文本依赖、404 console、Ant Design deprecated warning、Vite chunk size warning、inherited large file issue 和 LSP diagnostics `Transport closed` 均作为 Step12 release gate 输入；当前不写成 resolved |
+| C-049 到 C-054 | 仍为 Deferred / Open Question；本节不关闭相似度阈值、考察点绑定模型、失败折叠最终样式、错误枚举最终映射、刷新恢复最终状态机或下一题具体算法 |
+
+#### Step12 active-docs unblock 结论
+
+AIFI-REL-008 原阻断项已经以 active docs / evidence / checklist-only 形式收口，允许重新执行 Step12 / AIFI-REL-009 的 implementation scope lock。该结论不授权 Step12 implementation 本身；implementation 是否允许必须以后续 `.omo/evidence/plan/step12-implementation-scope-lock.md` 的 `execution_mode=AUTHORIZED` 和 `implementation_allowed=true` 为准。
+
 
 ## 6. F1.3 结论
 
