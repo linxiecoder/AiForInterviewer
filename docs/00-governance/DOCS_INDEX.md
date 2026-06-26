@@ -61,6 +61,10 @@ permalink: ai-for-interviewer/docs/00-governance/docs-index
 | docs/02 深度语义关联审计验收记录 | `docs/02-design/reviews/DOCS02_DEEP_SEMANTIC_ACCEPTANCE.md` | AIFI-ARCH-006 深度语义审计证据；记录审计范围、语义链路矩阵完成情况、finding 数量、F5/F6/F7/F8 readiness 结论、人工决策项和 MCP approval 状态占位；F4/M4 人工批准后作为后续 F6/F8 refinement evidence 保留，不阻断 F5，不替代 active design docs |
 | 阶段计划 | `docs/03-implementation/DELIVERY_PLAN.md` | 唯一阶段与里程碑入口 |
 | 任务入口 | `docs/03-implementation/BACKLOG.md` | 唯一任务入口 |
+| Feedback-loop 发布门禁清单 | `docs/03-implementation/FEEDBACK_LOOP_RELEASE_CHECKLIST.md` | AIFI-REL-009 当前产物；阶段 F8；状态 active-f8；登记 feedback-loop release gate（发布门禁）、known risks（已知风险）和 go/no-go（是否继续）判断；不声明 production release-ready（生产可发布），不执行发布、回滚、灰度、迁移、配置或依赖变更 |
+| Feedback-loop 发布运行手册边界 | `docs/03-implementation/FEEDBACK_LOOP_RELEASE_RUNBOOK.md` | AIFI-REL-009 当前产物；阶段 F8；状态 active-f8；登记 default-off（默认关闭）、gray（灰度）、rollback（回滚）、degradation（降级）和 restore（恢复）的审查清单；不包含真实 env var、部署脚本或可执行回滚命令 |
+| Feedback-loop QA 证据归档 | `docs/03-implementation/FEEDBACK_LOOP_QA_EVIDENCE.md` | AIFI-REL-009 当前产物；阶段 F8；状态 active-f8；归档 Step1 到 Step11 QA evidence（质量证据）、命令结果、覆盖面和 residual evidence gaps（残余证据缺口）；不替代代码事实或测试输出 |
+| Feedback-loop 发布说明草稿 | `docs/03-implementation/FEEDBACK_LOOP_CHANGELOG_DRAFT.md` | AIFI-REL-009 当前产物；阶段 F8；状态 active-f8；登记 release notes draft（发布说明草稿）、已知限制和 not included（不包含）边界；不是已发布 changelog（变更记录），不授权 production release（生产发布） |
 | F5 后端实现说明 | `docs/03-implementation/F5_BACKEND_IMPLEMENTATION_NOTES.md` | F5 后端实现记录与 capability de-layer 后的 implementation mapping / validation evidence 承接点；不作为新的 standalone container，不把 design-only / deferred / partial 升级为 implemented |
 | Agent IO 共享抽象实现摘要 | `docs/03-implementation/agent-io-shared-abstractions-summary.md` | Agent IO 共享抽象、采用矩阵、外部契约保持和验证命令摘要；不作为 Agent contract registry 或新任务入口 |
 | 归档说明 | `archive/README.md` | archive 用途和禁止事项 |
