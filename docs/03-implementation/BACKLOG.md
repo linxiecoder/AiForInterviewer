@@ -81,7 +81,7 @@ PR1.6 blocker note：`AIFI-BE-004` 已由 `docs/02-design/PRESSURE_MODE_SPEC.md`
 | AIFI-BE-013 | F5 | M5 | MUST | Progress mastery and manual completion consistency | 已完成 progress mastery、score evolution、longitudinal feedback summary 和 stable user state projection；输出为 derived-only，不授权 Step7 question generation、next_question_recommendation、adaptive_learning_path、auto_tutoring 或 trend_autopilot | progress/use cases 一致性行为和 tests/api；Step6 commit `1bfa1cea0d213e01c00f20fda33971b68fac7996` | AIFI-BE-010；AIFI-BE-012；AIFI-BE-015 | DONE |
 | AIFI-BE-014 | F5 | M5 | MUST | Follow-up and next-question behavior | 已完成受 policy signature（策略签名）约束的同节点追问、同节点下一题候选选择、next action / response contract（下一步动作 / 响应契约）和无签名 fail-closed（失败关闭）；不授权泛化 question generation、open-ended generation、adaptive_learning_path、auto_tutoring、curriculum_generation、Step6 mastery autopilot 或重写 Step2-6 | Step7 implementation commit `bad29f58389ddd1a0bb440af31c03139eee633f7`；policy-signed same-node follow-up / next-question contract metadata；`tests/domain/polish/test_follow_up_coverage_policy.py tests/api/test_polish_api.py -q` 结果为 `127 passed in 13.04s`；不得关闭 C-049 / C-054 | AIFI-BE-013 | DONE |
 | AIFI-BE-017 | F5 | M5 | MUST | API schema and response envelope boundary | 已完成 Step8 后端 API response schema、payload envelope、signed action / feedback / progress / follow-up outputs 的兼容汇总；不改变 Step2-7 业务决策，不授权 FE、migration、release、Step9-12 或 C-049 到 C-054 关闭 | implementation commit `23990da79118d200024735f193ba9b5d4499d4a2`；response allowlist / response schema additive fields；backend contract tests；Step8 implementation scope lock evidence | AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-QA-004 | DONE |
-| AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model、失败折叠和旧 payload 容错 | `entities/polish` view model/types/API 适配和 FE tests | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002 | NOT_STARTED |
+| AIFI-FE-003 | F6 | M6 | MUST | Feedback view model and failure folding | 实现前端 feedback view model（视图模型）、失败折叠和旧 payload（载荷）容错；当前仅允许重新执行 Step9 implementation scope lock（实现范围锁），不直接授权 implementation（实现） | `entities/polish` view model/types/API 适配和 FE tests（前端测试）；Step9 scope lock（范围锁）证据 | AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002（参考上下文，非硬依赖）；AIFI-QA-004 | READY_TO_START |
 | AIFI-FE-004 | F6 | M6 | MUST | Interview workbench interaction and refresh recovery | 实现面试工作台反馈交互、刷新恢复和重试/降级呈现 | `InterviewPage.tsx` 行为和相关 FE tests | AIFI-FE-003；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014 | NOT_STARTED |
 | AIFI-REL-009 | F8 | M8 | MUST | Feedback-loop release gate and rollback checklist | 建立 feedback-loop 发布门禁、回滚 checklist 和 QA evidence 归档要求 | release/runbook/QA evidence 文档更新 | AIFI-QA-004；AIFI-BE-010；AIFI-BE-011；AIFI-BE-012；AIFI-BE-015；AIFI-BE-013；AIFI-BE-014；AIFI-FE-003；AIFI-FE-004；AIFI-REL-008 | NOT_STARTED |
 
@@ -358,11 +358,13 @@ Downstream handling：
 - 非目标：不改 `InterviewPage.tsx` 页面交互；不定义最终视觉样式；不改后端；不关闭 C-051 或 C-053。
 - 允许修改路径：`apps/web/src/entities/polish/**`；同目录或现有 FE 测试目录下的相关 `*.test.ts`、`*.test.tsx`。
 - 禁止修改路径：`apps/web/src/pages/interview/InterviewPage.tsx`；`apps/api/**`；`tests/api/**`；配置文件；`archive/**`；`_bmad-output/**`；`.omo/plans/**`。
-- 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002；AIFI-QA-004。
+- 依赖：AIFI-BE-010；AIFI-BE-011；AIFI-BE-014；AIFI-FE-002（参考上下文，非硬依赖）；AIFI-QA-004。
 - 验收标准：view model 对旧 payload 和失败 payload 有稳定输出；缺失字段不导致渲染异常；错误折叠不会伪装为成功 feedback；相关 FE tests 或 typecheck 覆盖核心转换。
 - 对应 plan.md Step：Step 9。Step 8 backend schema / response envelope 已由 AIFI-BE-017 承接；本任务不授权 Step8 implementation。
 - 对应 PRD AC / FR / BR：AC-012、AC-013、AC-015；FR-002 到 FR-005、FR-008 到 FR-010、FR-023 到 FR-031、FR-060 到 FR-064；BR-009、BR-010、BR-021、BR-023。
 - C-049 到 C-054 是否仍保持 Deferred：是。该任务不决定最终 UI 形态或刷新恢复状态机，只提供可兼容的数据视图模型。
+- 当前状态：READY_TO_START。Step9 initial scope lock（初始范围锁）因 AIFI-FE-002=NOT_STARTED 硬依赖口径被阻塞；本次 active-docs unblock（当前有效文档解锁）仅把 AIFI-FE-002 调整为参考上下文，允许重新执行 Step9 implementation scope lock（实现范围锁）。scope lock 生成 `execution_mode=AUTHORIZED` 前，不得开始 implementation（实现）。
+- 边界：Step9 implementation scope lock（实现范围锁）若通过，只能授权 FE types（前端类型）、API response type alignment（API 响应类型对齐）、view model mapping（视图模型映射）、progress / follow-up / signed next action projection（进展 / 追问 / 已签名下一步动作投影）、pending / failed / partial state projection（等待 / 失败 / 部分状态投影）和 backwards-compatible FE contract tests（向后兼容前端契约测试）；不得修改 `InterviewPage.tsx`，不得进入 Step10 / Step11 / Step12，且不得关闭 C-049 到 C-054。
 
 ### AIFI-FE-004 Interview workbench interaction and refresh recovery
 
