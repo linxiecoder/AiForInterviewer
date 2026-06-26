@@ -272,6 +272,7 @@ def test_api_run_settings_prefer_cli_port_over_dotenv_environment(monkeypatch) -
 
     monkeypatch.setenv("API_HOST", "127.0.0.1")
     monkeypatch.setenv("API_PORT", "8001")
+    monkeypatch.delenv("API_LOG_FILE", raising=False)
 
     settings = dev_env.resolve_api_run_settings(["--host", "127.0.0.1", "--port", "8003"])
     dev_env.apply_api_run_settings_to_env(settings)
@@ -284,6 +285,7 @@ def test_api_run_settings_prefer_cli_port_over_dotenv_environment(monkeypatch) -
     assert os.environ["API_HOST"] == "127.0.0.1"
     assert os.environ["API_PORT"] == "8003"
     assert os.environ["API_LOG_FILE"] == "tmp/logs/api-dev.log"
+    os.environ.pop("API_LOG_FILE", None)
 
 
 def test_start_script_resolves_web_runtime_before_starting_processes() -> None:

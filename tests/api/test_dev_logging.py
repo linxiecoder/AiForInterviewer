@@ -35,6 +35,7 @@ def test_dev_python_runner_defaults_api_log_file(monkeypatch) -> None:
 
     assert settings.log_file_path == "tmp/logs/api-dev.log"
     assert os.environ["API_LOG_FILE"] == "tmp/logs/api-dev.log"
+    os.environ.pop("API_LOG_FILE", None)
 
 
 def test_dev_python_runner_preserves_explicit_api_log_file(monkeypatch) -> None:

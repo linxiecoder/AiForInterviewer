@@ -61,12 +61,16 @@ def test_registry_uses_polish_question_descriptor_builder() -> None:
 
 
 def test_skeleton_fails_closed_when_graph_flag_disabled() -> None:
-    from app.application.ai_runtime.business_graphs.polish_question_graph import run_polish_question_skeleton
+    from app.application.ai_runtime.business_graphs.polish_question_graph import (
+        POLISH_QUESTION_GRAPH_FLAG,
+        run_polish_question_skeleton,
+    )
 
     context = _context()
+    resolver = RuntimeFlagResolver(test_overrides={POLISH_QUESTION_GRAPH_FLAG: False})
 
     with pytest.raises(GraphDisabledError):
-        run_polish_question_skeleton(context, context.command)
+        run_polish_question_skeleton(context, context.command, flag_resolver=resolver)
 
 
 def test_skeleton_returns_unavailable_safe_response_when_enabled() -> None:

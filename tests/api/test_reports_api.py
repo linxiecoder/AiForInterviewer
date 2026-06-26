@@ -6,9 +6,10 @@ from app.application.training.use_cases import TrainingUseCases
 from app.domain.shared.clock import utc_now
 from app.domain.shared.ids import ResourceIdPrefix, stable_resource_id
 from app.infrastructure.db.models.report import InterviewReport, ReportSection
+from app.infrastructure.db.session import DbSettings
 from app.infrastructure.security.auth import AuthRuntimeSettings, build_auth_runtime
 from app.infrastructure.security.passwords import Pbkdf2PasswordHasher
-from app.main import create_app
+from app.main import ApiSettings, create_app
 from tests.api.asgi_client import call_json, call_json_response
 
 USER_A_ID = stable_resource_id(ResourceIdPrefix.USER, "user_a@example.com")
@@ -240,7 +241,12 @@ def _app_with_two_users():
         display_name="User B",
         password_hash=Pbkdf2PasswordHasher().hash_password(USER_B_PASSWORD),
     )
-    return create_app(auth_runtime=runtime, initialize_schema=True)
+    return create_app(
+        settings=ApiSettings(),
+        auth_runtime=runtime,
+        db_settings=DbSettings(database_url="sqlite+pysqlite:///:memory:"),
+        initialize_schema=True,
+    )
 
 
 def _login_cookie(app, identifier: str, password: str) -> str:

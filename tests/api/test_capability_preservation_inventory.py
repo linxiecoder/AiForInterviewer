@@ -48,15 +48,6 @@ IMPLEMENTED_ROUTE_EXPECTATIONS = (
 
 
 PREFIX_ONLY_SKELETON_MODULES = {
-    "ai-tasks": {
-        "api_module": "app.api.v1.ai_tasks",
-        "api_path": "apps/api/app/api/v1/ai_tasks.py",
-        "api_prefix": "/api/v1/ai-tasks",
-        "repository_path": "apps/api/app/infrastructure/db/repositories/ai_tasks.py",
-        "repository_marker": "pass",
-        "use_case_path": "apps/api/app/application/ai_tasks/use_cases.py",
-        "skeleton_marker": "ai_task_skeleton",
-    },
     "pressure": {
         "api_module": "app.api.v1.pressure",
         "api_path": "apps/api/app/api/v1/pressure.py",
@@ -75,6 +66,8 @@ PREFIX_ONLY_SKELETON_MODULES = {
 
 
 CURRENT_ROUTE_CONTRACT_SNAPSHOT = (
+    ("GET", "/api/v1/ai-tasks/{ai_task_id}", "app.api.v1.ai_tasks.get_ai_task_status"),
+    ("GET", "/api/v1/ai-tasks/{ai_task_id}/result", "app.api.v1.ai_tasks.get_ai_task_result"),
     ("GET", "/api/v1/assets", "app.api.v1.assets.list_assets"),
     ("POST", "/api/v1/assets", "app.api.v1.assets.create_asset"),
     ("DELETE", "/api/v1/assets/{asset_id}", "app.api.v1.assets.delete_asset"),
@@ -103,7 +96,6 @@ CURRENT_ROUTE_CONTRACT_SNAPSHOT = (
     ("GET", "/api/v1/polish-sessions", "app.api.v1.polish.list_polish_sessions"),
     ("POST", "/api/v1/polish-sessions", "app.api.v1.polish.create_polish_session"),
     ("GET", "/api/v1/polish-sessions/{session_id}", "app.api.v1.polish.get_polish_session"),
-    ("POST", "/api/v1/polish-sessions/{session_id}/questions", "app.api.v1.polish.create_polish_question_task"),
     ("POST", "/api/v1/polish-sessions/{session_id}/answers", "app.api.v1.polish.create_polish_answer"),
     ("POST", "/api/v1/polish-sessions/{session_id}/delete", "app.api.v1.polish.soft_delete_polish_session"),
     ("POST", "/api/v1/polish-sessions/{session_id}/end", "app.api.v1.polish.end_polish_session"),
@@ -115,6 +107,7 @@ CURRENT_ROUTE_CONTRACT_SNAPSHOT = (
     ),
     ("POST", "/api/v1/polish-sessions/{session_id}/progress-tree/generate", "app.api.v1.polish.generate_initial_polish_progress_tree"),
     ("POST", "/api/v1/polish-sessions/{session_id}/progress-tree/state", "app.api.v1.polish.refresh_polish_progress_tree_state"),
+    ("POST", "/api/v1/polish-sessions/{session_id}/questions", "app.api.v1.polish.create_polish_question_task"),
     ("POST", "/api/v1/polish-sessions/{session_id}/questions/{question_id}/complete", "app.api.v1.polish.complete_polish_question"),
     ("POST", "/api/v1/polish-sessions/{session_id}/report", "app.api.v1.polish.generate_polish_session_report"),
     ("GET", "/api/v1/polish-topics", "app.api.v1.polish.list_polish_topics"),
@@ -178,9 +171,7 @@ POLISH_ROUTE_HANDLER_EXPECTATIONS = (
     ("GET", "/api/v1/polish-topics", "app.api.v1.polish.list_polish_topics"),
 )
 
-NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS = frozenset(
-    {"Pressure", "Reviews", "Reports", "ai-tasks", "Training", "Polish"}
-)
+NON_IMPLEMENTED_ROUTE_CAPABILITY_LABELS = frozenset({"Pressure", "Reviews", "Reports", "Training", "Polish"})
 
 REPORTS_RETRIEVAL_V1_ROUTE = (
     "GET",
@@ -283,24 +274,25 @@ def test_reports_retrieval_v1_is_partial_route_not_prefix_only_skeleton() -> Non
     assert "Only polish_summary reports can be retrieved in this slice." in use_case_source
 
 
-def test_ai_tasks_prefix_alone_is_not_product_runtime_capability() -> None:
-    expected = PREFIX_ONLY_SKELETON_MODULES["ai-tasks"]
-    module = importlib.import_module(expected["api_module"])
+def test_ai_tasks_runtime_read_routes_are_registered_without_product_capability_claim() -> None:
+    module = importlib.import_module("app.api.v1.ai_tasks")
     router = getattr(module, "router")
-    app_paths = {route.path for route in create_app().routes if getattr(route, "path", "").startswith("/api/v1")}
+    snapshot = _route_contract_snapshot()
+    implemented_capabilities = {expectation.capability for expectation in IMPLEMENTED_ROUTE_EXPECTATIONS}
 
     assert router.prefix == "/ai-tasks"
-    assert router.routes == []
-    assert expected["api_prefix"] not in app_paths
-    assert not any(path.startswith(f"{expected['api_prefix']}/") for path in app_paths)
+    assert {
+        ("GET", "/api/v1/ai-tasks/{ai_task_id}", "app.api.v1.ai_tasks.get_ai_task_status"),
+        ("GET", "/api/v1/ai-tasks/{ai_task_id}/result", "app.api.v1.ai_tasks.get_ai_task_result"),
+    } <= set(snapshot)
+    assert "ai-tasks" not in PREFIX_ONLY_SKELETON_MODULES
+    assert "ai-tasks" not in implemented_capabilities
 
-    route_source = (REPO_ROOT / expected["api_path"]).read_text(encoding="utf-8")
-    use_case_source = (REPO_ROOT / expected["use_case_path"]).read_text(encoding="utf-8")
-    repository_source = (REPO_ROOT / expected["repository_path"]).read_text(encoding="utf-8")
+    route_source = (REPO_ROOT / "apps/api/app/api/v1/ai_tasks.py").read_text(encoding="utf-8")
+    use_case_source = (REPO_ROOT / "apps/api/app/application/ai_tasks/use_cases.py").read_text(encoding="utf-8")
 
-    assert "@router." not in route_source
+    assert "@router.get" in route_source
     assert "ai_task_skeleton" in use_case_source
-    assert "pass" in repository_source
 
 
 def _route_contract_snapshot() -> tuple[tuple[str, str, str], ...]:

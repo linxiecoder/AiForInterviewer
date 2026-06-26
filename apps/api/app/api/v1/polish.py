@@ -53,7 +53,9 @@ from app.application.polish.entities import (
 from app.application.polish.feedback_projection import (
     ANSWER_NEXT_RECOMMENDED_ACTIONS,
     PENDING_FEEDBACK_TEXT,
+    REDACTED_SENSITIVE_FEEDBACK_DETAIL,
     pending_feedback_payload,
+    redact_feedback_payload_text,
     response_safe_feedback_payload,
 )
 from app.application.polish.feedback_generation_service import FeedbackGenerationService
@@ -106,6 +108,8 @@ from app.schemas.refs import ResourceRef, TraceRefSchema
 
 
 router = APIRouter(tags=["polish"])
+
+_redact_forbidden_feedback_payload_response_text = redact_feedback_payload_text
 
 # ── 常量区 ──────────────────────────────────────────────────────────
 # 以下常量控制：Legacy 兼容标题、默认反馈文案、推荐操作列表、响应脱敏规则

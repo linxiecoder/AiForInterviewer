@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _runner_env() -> dict[str, str]:
     env = os.environ.copy()
-    env["PYTHONPATH"] = ".:apps/api"
+    env["PYTHONPATH"] = os.pathsep.join((".", "apps/api"))
     env["LLM_PROVIDER"] = "fake"
     env.pop("OPENAI_API_KEY", None)
     return env
@@ -30,6 +30,7 @@ def test_phase9_provider_eval_gate_rejects_live_provider_mode_by_default() -> No
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -54,6 +55,7 @@ def test_phase9_provider_eval_report_is_non_claim_and_ci_safe_without_credential
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,

@@ -119,6 +119,7 @@ def _git_changed_paths() -> list[str]:
     result = subprocess.run(
         ["git", "status", "--short", "--untracked-files=all"],
         cwd=REPO_ROOT,
+        stdin=subprocess.DEVNULL,
         check=True,
         capture_output=True,
         text=True,

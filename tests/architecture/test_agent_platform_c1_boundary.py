@@ -133,13 +133,13 @@ def test_agent_platform_public_contract_and_catalog_api_has_docstrings() -> None
 
 def test_runtime_tool_authorization_call_sites_require_tool_definition_keyword() -> None:
     calls = _runtime_tool_authorization_calls()
-    call_files = {str(path.relative_to(REPO_ROOT)) for path, _node in calls}
+    call_files = {path.relative_to(REPO_ROOT).as_posix() for path, _node in calls}
     missing_tool_keyword = []
     none_tool_keyword = []
 
     for path, node in calls:
         keywords = {keyword.arg: keyword.value for keyword in node.keywords if keyword.arg is not None}
-        site = f"{path.relative_to(REPO_ROOT)}:{node.lineno}"
+        site = f"{path.relative_to(REPO_ROOT).as_posix()}:{node.lineno}"
         if "tool" not in keywords:
             missing_tool_keyword.append(site)
             continue

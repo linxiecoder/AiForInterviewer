@@ -344,7 +344,7 @@ def test_feedback_agent_sends_compact_provider_prompt_with_required_contract_fie
     provider_prompt = transport.requests[-1].evidence_bundle
     assert provider_prompt["task_type"] == POLISH_FEEDBACK_TASK_TYPE
     assert provider_prompt["prompt_version"] == POLISH_FEEDBACK_AGENT_PROMPT_VERSION
-    assert provider_prompt["prompt"] == prompt_asset["prompt"]
+    assert provider_prompt["prompt"] == "[redacted]"
     assert provider_prompt["output_schema"]["schema_id"] == POLISH_FEEDBACK_FINAL_SCHEMA_ID
     assert "$defs" not in provider_prompt["output_schema"]
     assert provider_prompt["output_schema"]["fields"] == list(POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS)

@@ -19,7 +19,7 @@ PHASE9_NON_PROVIDER_QUALITY_NON_CLAIMS = {
 
 def _runner_env() -> dict[str, str]:
     env = os.environ.copy()
-    env["PYTHONPATH"] = ".:apps/api"
+    env["PYTHONPATH"] = os.pathsep.join((".", "apps/api"))
     env.pop("LLM_PROVIDER", None)
     return env
 
@@ -95,6 +95,7 @@ def test_phase9_eval_gate_writes_json_and_markdown_reports(tmp_path: Path) -> No
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -127,6 +128,7 @@ def test_phase9_eval_gate_reports_to_docs_dir_without_docs_json(tmp_path: Path) 
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -150,6 +152,7 @@ def test_phase9_negative_control_proves_blocking_failure() -> None:
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -179,6 +182,7 @@ def test_phase9_gate_default_mode_does_not_require_live_provider_credentials() -
         [sys.executable, "scripts/evals/run_eval_gate.py", "--suite", "phase9", "--mode", "replay"],
         cwd=REPO_ROOT,
         env=env,
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,

@@ -56,7 +56,7 @@ REQUIRED_PROVIDER_QUALITY_NON_CLAIMS = {
 
 def _runner_env() -> dict[str, str]:
     env = os.environ.copy()
-    env["PYTHONPATH"] = ".:apps/api"
+    env["PYTHONPATH"] = os.pathsep.join((".", "apps/api"))
     env.pop("LLM_PROVIDER", None)
     return env
 
@@ -155,6 +155,7 @@ def test_phase12_l5_runner_passes_blocking_gate_without_provider_dependency() ->
         [sys.executable, "scripts/evals/run_l5_eval_suite.py", "--mode", "deterministic"],
         cwd=REPO_ROOT,
         env=env,
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -191,6 +192,7 @@ def test_phase12_l5_runner_writes_json_and_markdown_reports(tmp_path: Path) -> N
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -214,6 +216,7 @@ def test_phase12_l5_negative_control_proves_runner_can_block_release_path() -> N
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,

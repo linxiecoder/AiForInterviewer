@@ -35,15 +35,16 @@ class ManagedTempArtifactsTests(unittest.TestCase):
         owner_root = workspace.parent
         marker = workspace / "marker.txt"
         marker.write_text("ok", encoding="utf-8")
+        managed_root = (self.sandbox_root / "managed-root").resolve()
 
         self.assertTrue(workspace.exists())
-        self.assertEqual(owner_root.parent, self.sandbox_root / "managed-root")
+        self.assertEqual(owner_root.parent.resolve(), managed_root)
 
         manager.cleanup()
 
         self.assertFalse(workspace.exists())
         self.assertFalse(owner_root.exists())
-        self.assertTrue((self.sandbox_root / "managed-root").exists())
+        self.assertTrue(managed_root.exists())
 
     def test_cleanup_can_keep_artifacts_for_debugging(self) -> None:
         manager = ManagedTempArtifacts(

@@ -735,23 +735,140 @@ def test_polish_feedback_application_service_create_feedback_task_owns_main_flow
             "status": "generated",
             "schema_id": "polish_feedback_generated_v1",
             "schema_version": "1.0",
-            "contract_ids": ["P-POLISH-005"],
+            "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
             "feedback_text": "反馈文本",
             "answer_summary": "回答总结",
             "score_result": {
                 "score_type": "polish_answer",
                 "score_value": 80,
+                "progress_state_ref": "progress-node-main-flow",
+                "reasoning": "单元测试反馈结果具备可解释评分依据。",
+                "adaptive_rubric": {
+                    "progress_state_ref": "progress-node-main-flow",
+                    "dimensions": [
+                        {
+                            "dimension": "correctness",
+                            "adaptive_weight": 0.2,
+                            "progress_basis": ["progress-node-main-flow"],
+                        },
+                        {
+                            "dimension": "depth",
+                            "adaptive_weight": 0.2,
+                            "progress_basis": ["progress-node-main-flow"],
+                        },
+                        {
+                            "dimension": "tradeoff_reasoning",
+                            "adaptive_weight": 0.2,
+                            "progress_basis": ["progress-node-main-flow"],
+                        },
+                        {
+                            "dimension": "structure",
+                            "adaptive_weight": 0.2,
+                            "progress_basis": ["progress-node-main-flow"],
+                        },
+                        {
+                            "dimension": "engineering_awareness",
+                            "adaptive_weight": 0.2,
+                            "progress_basis": ["progress-node-main-flow"],
+                        },
+                    ],
+                },
                 "dimension_scores": [
-                    {"dimension": "correctness", "score": 84, "rationale": "方向正确。"},
-                    {"dimension": "depth", "score": 78, "rationale": "细节略少。"},
-                    {"dimension": "tradeoff_reasoning", "score": 76, "rationale": "取舍略少。"},
-                    {"dimension": "structure", "score": 82, "rationale": "结构清楚。"},
-                    {"dimension": "engineering_awareness", "score": 80, "rationale": "工程意识中等。"},
+                    {
+                        "dimension": "correctness",
+                        "score": 84,
+                        "adaptive_weight": 0.2,
+                        "progress_focus": ["progress-node-main-flow"],
+                        "rationale": "方向正确。",
+                    },
+                    {
+                        "dimension": "depth",
+                        "score": 78,
+                        "adaptive_weight": 0.2,
+                        "progress_focus": ["progress-node-main-flow"],
+                        "rationale": "细节略少。",
+                    },
+                    {
+                        "dimension": "tradeoff_reasoning",
+                        "score": 76,
+                        "adaptive_weight": 0.2,
+                        "progress_focus": ["progress-node-main-flow"],
+                        "rationale": "取舍略少。",
+                    },
+                    {
+                        "dimension": "structure",
+                        "score": 82,
+                        "adaptive_weight": 0.2,
+                        "progress_focus": ["progress-node-main-flow"],
+                        "rationale": "结构清楚。",
+                    },
+                    {
+                        "dimension": "engineering_awareness",
+                        "score": 80,
+                        "adaptive_weight": 0.2,
+                        "progress_focus": ["progress-node-main-flow"],
+                        "rationale": "工程意识中等。",
+                    },
+                ],
+                "adaptive_insights": {
+                    "strong_skills": [],
+                    "weak_skills": ["progress-node-main-flow"],
+                    "unstable_skills": [],
+                    "overweighted_skills": [],
+                    "underweighted_skills": [],
+                },
+                "signals": ["progress_update"],
+                "progress_updates": [
+                    {
+                        "progress_node_ref": "progress-node-main-flow",
+                        "dimension": "engineering_awareness",
+                        "signal": "needs_focus",
+                    }
                 ],
             },
             "loss_points": [],
-            "reference_answer": None,
+            "reference_answer": {
+                "sections": [
+                    {
+                        "section_id": "ref_main_flow",
+                        "title": "回答建议",
+                        "content": "补充异步、幂等和失败恢复边界。",
+                        "addresses_loss_point_ids": [],
+                    }
+                ]
+            },
+            "asset_consistency_check": {
+                "status": "insufficient_asset_context",
+                "checked_asset_refs": [],
+                "conflicts": [],
+                "unsupported_claims": [],
+                "user_clarification_required": False,
+            },
+            "answer_coverage": {
+                "expected_points": ["异步", "幂等", "失败恢复"],
+                "covered_points": ["异步", "幂等"],
+                "missing_points": ["失败恢复"],
+                "weak_points": [],
+                "contradicted_points": [],
+            },
+            "answer_change_analysis": {
+                "has_prior_attempts": False,
+                "previous_answer_refs": [],
+                "retained_points": [],
+                "newly_added_points": [],
+                "regressed_points": [],
+                "repeated_loss_points": [],
+                "fixed_loss_points": [],
+                "score_delta": None,
+                "trend": "first_attempt",
+            },
+            "feedback_cards": [
+                {"card_type": "overall", "status": "available", "payload": {"summary": "核心反馈可用"}},
+            ],
+            "next_recommended_actions": ["review_reference_answer"],
+            "low_confidence_flags": [],
             "trace_refs": ("trace_feedback",),
+            "feedback_metadata": {"provider_status": "unit_test"},
         }
         validation_errors = ()
         metadata = {"provider_status": "unit_test"}
@@ -912,7 +1029,12 @@ def test_polish_feedback_application_service_persists_feedback_and_task_with_can
         "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
         "feedback_text": "回答覆盖了 MQ 解耦和幂等，但缺少失败恢复指标。",
         "answer_summary": "候选人说明了补偿和幂等策略。",
-        "score_result": {"score_type": "polish_answer", "score_value": 82, "score_level": "good"},
+        "score_result": {
+            "score_type": "polish_answer",
+            "score_value": 82,
+            "score_level": "good",
+            "reasoning": "单元测试反馈结果具备候选引用边界说明。",
+        },
         "loss_points": [
             {
                 "loss_point_id": "lp_failure_recovery_metric",

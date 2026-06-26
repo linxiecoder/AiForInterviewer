@@ -539,9 +539,9 @@ class SqlAlchemyPolishRepository(PolishRepository):
             else:
                 db.merge(_task_result_to_model(task, owner_id=owner_id, actor_id=actor_id))
             try:
-                db.flush()
                 if should_add_feedback:
                     db.add(_feedback_to_model(feedback))
+                db.flush()
                 db.commit()
             except SQLAlchemyError:
                 db.rollback()

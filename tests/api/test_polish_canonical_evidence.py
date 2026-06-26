@@ -359,9 +359,105 @@ class _FeedbackGenerationServiceStub:
                 "contract_ids": ["P-POLISH-003", "P-POLISH-004", "P-POLISH-005"],
                 "feedback_text": "Generated with canonical assets.",
                 "answer_summary": "Answer references backend workflow facts.",
-                "score_result": {"score_type": "polish_answer", "score_value": 86},
+                "score_result": {
+                    "score_type": "polish_answer",
+                    "score_value": 86,
+                    "progress_state_ref": "progress-node-canonical",
+                    "reasoning": "Canonical asset context supports the generated feedback.",
+                    "adaptive_rubric": {
+                        "progress_state_ref": "progress-node-canonical",
+                        "dimensions": [
+                            {
+                                "dimension": "correctness",
+                                "adaptive_weight": 0.2,
+                                "progress_basis": ["progress-node-canonical"],
+                            },
+                            {
+                                "dimension": "depth",
+                                "adaptive_weight": 0.2,
+                                "progress_basis": ["progress-node-canonical"],
+                            },
+                            {
+                                "dimension": "tradeoff_reasoning",
+                                "adaptive_weight": 0.2,
+                                "progress_basis": ["progress-node-canonical"],
+                            },
+                            {
+                                "dimension": "structure",
+                                "adaptive_weight": 0.2,
+                                "progress_basis": ["progress-node-canonical"],
+                            },
+                            {
+                                "dimension": "engineering_awareness",
+                                "adaptive_weight": 0.2,
+                                "progress_basis": ["progress-node-canonical"],
+                            },
+                        ],
+                    },
+                    "dimension_scores": [
+                        {
+                            "dimension": "correctness",
+                            "score": 88,
+                            "adaptive_weight": 0.2,
+                            "progress_focus": ["progress-node-canonical"],
+                            "rationale": "Uses confirmed assets.",
+                        },
+                        {
+                            "dimension": "depth",
+                            "score": 86,
+                            "adaptive_weight": 0.2,
+                            "progress_focus": ["progress-node-canonical"],
+                            "rationale": "Includes project details.",
+                        },
+                        {
+                            "dimension": "tradeoff_reasoning",
+                            "score": 84,
+                            "adaptive_weight": 0.2,
+                            "progress_focus": ["progress-node-canonical"],
+                            "rationale": "Mentions retry tradeoffs.",
+                        },
+                        {
+                            "dimension": "structure",
+                            "score": 86,
+                            "adaptive_weight": 0.2,
+                            "progress_focus": ["progress-node-canonical"],
+                            "rationale": "Answer is organized.",
+                        },
+                        {
+                            "dimension": "engineering_awareness",
+                            "score": 86,
+                            "adaptive_weight": 0.2,
+                            "progress_focus": ["progress-node-canonical"],
+                            "rationale": "Covers persistence and retries.",
+                        },
+                    ],
+                    "adaptive_insights": {
+                        "strong_skills": ["progress-node-canonical"],
+                        "weak_skills": [],
+                        "unstable_skills": [],
+                        "overweighted_skills": [],
+                        "underweighted_skills": [],
+                    },
+                    "signals": ["strength_detected"],
+                    "progress_updates": [
+                        {
+                            "progress_node_ref": "progress-node-canonical",
+                            "dimension": "engineering_awareness",
+                            "signal": "strength_detected",
+                        }
+                    ],
+                },
                 "loss_points": [],
-                "reference_answer": {"sections": []},
+                "reference_answer": {
+                    "sections": [
+                        {
+                            "section_id": "ref_canonical_asset",
+                            "title": "Canonical asset answer",
+                            "content": "Use confirmed FastAPI and PostgreSQL workflow facts.",
+                            "addresses_loss_point_ids": [],
+                        }
+                    ]
+                },
                 "asset_consistency_check": {
                     "status": "consistent",
                     "checked_asset_refs": ["asset_confirmed_workflow"],

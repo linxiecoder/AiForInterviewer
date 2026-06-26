@@ -9,7 +9,7 @@ from app.infrastructure.db.repositories.scoring import SqlAlchemyScoringReposito
 from app.infrastructure.db.session import DbSettings, build_session_factory, initialize_schema
 from app.infrastructure.security.auth import AuthRuntimeSettings, build_auth_runtime
 from app.infrastructure.security.passwords import Pbkdf2PasswordHasher
-from app.main import create_app
+from app.main import ApiSettings, create_app
 from app.domain.shared.ids import ResourceIdPrefix, stable_resource_id
 from tests.api.asgi_client import call_json, call_json_response
 
@@ -621,7 +621,12 @@ def _app_with_two_users():
         display_name="Scoring User B",
         password_hash=Pbkdf2PasswordHasher().hash_password(USER_B_PASSWORD),
     )
-    return create_app(auth_runtime=runtime, initialize_schema=True)
+    return create_app(
+        settings=ApiSettings(),
+        auth_runtime=runtime,
+        db_settings=DbSettings(database_url="sqlite+pysqlite:///:memory:"),
+        initialize_schema=True,
+    )
 
 
 def _login_cookie(app, identifier: str, password: str) -> str:

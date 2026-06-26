@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _runner_env() -> dict[str, str]:
     env = os.environ.copy()
-    env["PYTHONPATH"] = ".:apps/api"
+    env["PYTHONPATH"] = os.pathsep.join((".", "apps/api"))
     env.pop("LLM_PROVIDER", None)
     return env
 
@@ -22,6 +22,7 @@ def test_run_question_eval_default_dataset_exits_zero() -> None:
         [sys.executable, "-m", "evals.runners.run_question_eval"],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -39,6 +40,7 @@ def test_run_feedback_eval_default_datasets_exits_zero() -> None:
         [sys.executable, "-m", "evals.runners.run_feedback_eval"],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -65,6 +67,7 @@ def test_runner_report_writes_json_summary(tmp_path: Path) -> None:
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -104,6 +107,7 @@ def test_runner_returns_one_for_valid_failing_dataset(tmp_path: Path) -> None:
         [sys.executable, "-m", "evals.runners.run_feedback_eval", "--dataset", str(dataset)],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -122,6 +126,7 @@ def test_runner_returns_two_for_invalid_jsonl(tmp_path: Path) -> None:
         [sys.executable, "-m", "evals.runners.run_question_eval", "--dataset", str(dataset)],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -144,6 +149,7 @@ def test_feedback_runner_accepts_multiple_dataset_args() -> None:
         ],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -162,6 +168,7 @@ def test_default_runner_does_not_write_eval_reports_directory() -> None:
         [sys.executable, "-m", "evals.runners.run_question_eval"],
         cwd=REPO_ROOT,
         env=_runner_env(),
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,
@@ -181,6 +188,7 @@ def test_runners_do_not_depend_on_llm_provider_or_fake_runtime() -> None:
         [sys.executable, "-m", "evals.runners.run_feedback_eval"],
         cwd=REPO_ROOT,
         env=env,
+        stdin=subprocess.DEVNULL,
         check=False,
         capture_output=True,
         text=True,

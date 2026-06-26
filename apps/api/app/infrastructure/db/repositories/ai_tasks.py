@@ -92,9 +92,10 @@ def _result_projection(
     payload: dict[str, Any] | None,
 ) -> dict[str, object]:
     safe_summary = _safe_summary(result)
+    result_payload = _feedback_result_payload(task, payload, safe_summary=safe_summary)
     projection = {
         "ai_task_id": task.id,
-        "status": result.status if result is not None else task.status,
+        "status": _result_status(task, result=result, result_payload=result_payload),
         "result_ref": _result_ref(task, result=result),
         "candidate_refs": _projected_candidate_refs(result, payload=payload, safe_summary=safe_summary),
         "suggestion_refs": _projected_suggestion_refs(result, payload=payload, safe_summary=safe_summary),
@@ -102,7 +103,6 @@ def _result_projection(
         "validation_errors": _projected_validation_errors(result, payload=payload, safe_summary=safe_summary),
         "provider_payload": None,
     }
-    result_payload = _feedback_result_payload(task, payload)
     if result_payload is not None:
         projection["result_payload"] = result_payload
     return projection
@@ -144,6 +144,24 @@ def _validation_result_ref(result: AiTaskResult | None) -> dict[str, str] | None
     if result is None or not result.validation_result_ref_id:
         return None
     return {"resource_type": "validation_result", "resource_id": result.validation_result_ref_id}
+
+
+def _result_status(
+    task: AiTask,
+    *,
+    result: AiTaskResult | None,
+    result_payload: dict[str, Any] | None,
+) -> str:
+    base_status = result.status if result is not None else task.status
+    if (
+        task.task_type == "polish_feedback_generation"
+        and isinstance(result_payload, dict)
+        and result_payload.get("status") == "generated"
+    ):
+        return "succeeded"
+    if task.task_type == "polish_feedback_generation" and base_status == "succeeded":
+        return "running"
+    return base_status
 
 
 def _candidate_refs(payload: dict[str, Any] | None) -> list[dict[str, str]]:
@@ -320,7 +338,23 @@ def _safe_text(value: object) -> str:
     return redact_feedback_payload_text(text).strip()
 
 
-def _feedback_result_payload(task: AiTask, payload: dict[str, Any] | None) -> dict[str, Any] | None:
-    if task.task_type != "polish_feedback_generation" or not isinstance(payload, dict):
+def _feedback_result_payload(
+    task: AiTask,
+    payload: dict[str, Any] | None,
+    *,
+    safe_summary: dict[str, Any],
+) -> dict[str, Any] | None:
+    if task.task_type != "polish_feedback_generation":
         return None
-    return response_safe_feedback_payload(payload)
+    source = payload if isinstance(payload, dict) else safe_summary
+    if not _looks_like_generated_feedback_payload(source):
+        return None
+    return response_safe_feedback_payload(source)
+
+
+def _looks_like_generated_feedback_payload(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("status") == "generated"
+        and isinstance(value.get("feedback_text"), str)
+    )
