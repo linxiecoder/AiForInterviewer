@@ -1018,11 +1018,18 @@ class _PolishUseCaseOperations:
             return ApplicationResult(
                 error=DomainError(code="not_found_or_inaccessible", message="Question not found")
             )
+        answers = self._polish_repository.list_answers_for_session(command.owner_id, command.session_id)
+        feedbacks = self._polish_repository.list_feedbacks_for_session(command.owner_id, command.session_id)
         now = utc_now()
         progress_tree_state = _progress_tree_state_with_completed_question(
             session.progress_tree_state,
             progress_tree_plan=session.progress_tree_plan,
             question=question,
+            feedback_consistency=_manual_completion_feedback_consistency(
+                question=question,
+                answers=answers,
+                feedbacks=feedbacks,
+            ),
             completed_at=now,
         )
         updated_session = replace(session, progress_tree_state=progress_tree_state, updated_at=now)
@@ -1755,6 +1762,7 @@ def _progress_tree_state_with_completed_question(
     *,
     progress_tree_plan: object,
     question: PolishQuestion,
+    feedback_consistency: dict[str, Any],
     completed_at: object,
 ) -> dict[str, Any]:
     state = dict(raw_state) if isinstance(raw_state, dict) else {}
@@ -1770,6 +1778,7 @@ def _progress_tree_state_with_completed_question(
         "blueprint_signature": _clean_question_request_text(metadata.get("blueprint_signature")),
         "completed_at": completed_at.isoformat() if hasattr(completed_at, "isoformat") else None,
         "source": "manual_question_complete",
+        "feedback_consistency": feedback_consistency,
     }
     state["completed_focus_refs"] = _completed_focus_refs_with_entry(
         state.get("completed_focus_refs"),
@@ -1782,6 +1791,44 @@ def _progress_tree_state_with_completed_question(
     )
     state["summary"] = "manual_question_completed"
     return state
+
+
+def _manual_completion_feedback_consistency(
+    *,
+    question: PolishQuestion,
+    answers: tuple[PolishAnswer, ...],
+    feedbacks: tuple[PolishFeedback, ...],
+) -> dict[str, Any]:
+    question_answers = tuple(answer for answer in answers if answer.question_id == question.question_id)
+    answer_by_id = {answer.answer_id: answer for answer in question_answers}
+    answer_ids = set(answer_by_id)
+    question_feedbacks = tuple(feedback for feedback in feedbacks if feedback.answer_id in answer_ids)
+    latest_effective_by_answer_id = _latest_feedback_by_answer_id(question_feedbacks)
+    source_traceability = [
+        {
+            "answer_id": answer_id,
+            "answer_round": answer_by_id[answer_id].answer_round,
+            "feedback_id": feedback.feedback_id,
+            "status": feedback.status,
+            "source_basis": "step2_effective_generated_feedback",
+        }
+        for answer_id, feedback in sorted(latest_effective_by_answer_id.items())
+    ]
+    ineffective_status_counts: dict[str, int] = {}
+    for feedback in question_feedbacks:
+        if _is_effective_feedback(feedback):
+            continue
+        ineffective_status_counts[feedback.status] = ineffective_status_counts.get(feedback.status, 0) + 1
+    return {
+        "source_basis": "step2_effective_generated_feedback + manual_question_complete",
+        "question_id": question.question_id,
+        "answer_count": len(question_answers),
+        "has_effective_generated_feedback": bool(source_traceability),
+        "effective_feedback_count": len(source_traceability),
+        "ineffective_feedback_status_counts": dict(sorted(ineffective_status_counts.items())),
+        "mastery_projection_status": "effective_feedback_available" if source_traceability else "manual_only",
+        "source_traceability": source_traceability,
+    }
 
 
 def _progress_tree_state_with_session_ended(raw_state: object, *, ended_at: object) -> dict[str, Any]:
@@ -1810,18 +1857,20 @@ def _normalized_completed_focus_entries(raw_refs: object) -> list[dict[str, Any]
         question_id = _clean_question_request_text(item.get("question_id"))
         if focus_key is None and question_id is None:
             continue
-        entries.append(
-            {
-                "question_id": question_id,
-                "progress_node_ref": _clean_question_request_text(item.get("progress_node_ref")),
-                "focus_key": focus_key,
-                "focus_dimension": _clean_question_request_text(item.get("focus_dimension")),
-                "template_signature": _clean_question_request_text(item.get("template_signature")),
-                "blueprint_signature": _clean_question_request_text(item.get("blueprint_signature")),
-                "completed_at": _clean_question_request_text(item.get("completed_at")),
-                "source": _clean_question_request_text(item.get("source")) or "manual_question_complete",
-            }
-        )
+        entry = {
+            "question_id": question_id,
+            "progress_node_ref": _clean_question_request_text(item.get("progress_node_ref")),
+            "focus_key": focus_key,
+            "focus_dimension": _clean_question_request_text(item.get("focus_dimension")),
+            "template_signature": _clean_question_request_text(item.get("template_signature")),
+            "blueprint_signature": _clean_question_request_text(item.get("blueprint_signature")),
+            "completed_at": _clean_question_request_text(item.get("completed_at")),
+            "source": _clean_question_request_text(item.get("source")) or "manual_question_complete",
+        }
+        feedback_consistency = item.get("feedback_consistency")
+        if isinstance(feedback_consistency, dict):
+            entry["feedback_consistency"] = dict(feedback_consistency)
+        entries.append(entry)
     return entries
 
 
