@@ -842,7 +842,7 @@ C-049 到 C-054 仍保持 `Deferred / Open Question`。AIFI-QA-005 只可承接 
 | 依赖语义 | AIFI-PROD-011 为直接来源；AIFI-ARCH-009、AIFI-QA-003、AIFI-BE-009、AIFI-FE-002 在本 docs/evidence/checklist-only closeout 中降级为参考上下文、非硬依赖 |
 | 替代证据 | AIFI-QA-004、AIFI-BE-010、AIFI-BE-011、AIFI-BE-012、AIFI-BE-015、AIFI-BE-013、AIFI-BE-014、AIFI-BE-017、AIFI-FE-003、AIFI-FE-004、AIFI-QA-005 的已完成实现 / QA closeout，以及本节登记的 release gate 待验证项 |
 | closeout evidence | `.omo/evidence/plan/aifi-rel-008-dependency-closeout.md`；`.omo/evidence/plan/step12-active-docs-unblock.md` |
-| AIFI-REL-009 状态 | READY_TO_START；只允许重新执行 Step12 implementation scope lock，不表示 release docs 已完成 |
+| AIFI-REL-009 解锁当时状态 | READY_TO_START；只允许重新执行 Step12 implementation scope lock，不表示 release docs 已完成。最终 release docs closeout 状态见 §5.16 |
 | release / rollback 边界 | 不命名真实 env var；不写部署脚本；不执行回滚或降级；不修改 runtime、migration、config、dependency 或业务 / 测试代码 |
 | Step11 residual risk 分类 | mobile DOM 文本依赖、404 console、Ant Design deprecated warning、Vite chunk size warning、inherited large file issue 和 LSP diagnostics `Transport closed` 均作为 Step12 release gate 输入；当前不写成 resolved |
 | C-049 到 C-054 | 仍为 Deferred / Open Question；本节不关闭相似度阈值、考察点绑定模型、失败折叠最终样式、错误枚举最终映射、刷新恢复最终状态机或下一题具体算法 |
@@ -850,6 +850,31 @@ C-049 到 C-054 仍保持 `Deferred / Open Question`。AIFI-QA-005 只可承接 
 #### Step12 active-docs unblock 结论
 
 AIFI-REL-008 原阻断项已经以 active docs / evidence / checklist-only 形式收口，允许重新执行 Step12 / AIFI-REL-009 的 implementation scope lock。该结论不授权 Step12 implementation 本身；implementation 是否允许必须以后续 `.omo/evidence/plan/step12-implementation-scope-lock.md` 的 `execution_mode=AUTHORIZED` 和 `implementation_allowed=true` 为准。
+
+### 5.16 Step 12 / AIFI-REL-009 Release Docs Closeout 状态登记
+
+本节登记 `.omo/plans/plan.md` Step 12 / AIFI-REL-009 的 release docs（发布文档）、runbook（运行手册）、QA evidence（质量证据）和 release notes draft（发布说明草稿）收口状态。该状态只说明 feedback-loop release gate 文档范围已完成，不改变 PRD 需求事实源，不关闭 C-049 到 C-054，不声明 production release-ready（生产可发布），也不授权 release（发布）、rollback（回滚）、gray（灰度）、migration（迁移）、config（配置）、dependency changes（依赖变更）或 runtime（运行时）改动。
+
+| 项 | 内容 |
+|---|---|
+| plan.md Step | Step 12：发布、回滚与最终验收门禁 |
+| BACKLOG 授权入口 | AIFI-REL-009 |
+| final_status | DONE / CLOSED（仅 AIFI-REL-009 文档范围） |
+| unblock commit | `b0540dba57adcc419eb45931688fea02e2520530` |
+| implementation docs commit | `7abd932630f81c40642dbc0a6834b7a580bbf585` |
+| release checklist | `docs/03-implementation/FEEDBACK_LOOP_RELEASE_CHECKLIST.md` |
+| release runbook | `docs/03-implementation/FEEDBACK_LOOP_RELEASE_RUNBOOK.md` |
+| QA evidence | `docs/03-implementation/FEEDBACK_LOOP_QA_EVIDENCE.md` |
+| release notes draft | `docs/03-implementation/FEEDBACK_LOOP_CHANGELOG_DRAFT.md` |
+| DOCS_INDEX sync | `docs/00-governance/DOCS_INDEX.md` 已登记 4 个新增 active-f8 文档 |
+| release decision | AIFI-REL-009 文档范围 DONE；production release NO-GO；gray release NO-GO；rollback execution NO-GO；degradation execution NO-GO |
+| residual risks | Step1 `ACCEPTED_RED`；mobile DOM 文本依赖；404 console；Ant Design deprecated warning；Vite chunk size warning；inherited large file issue；LSP diagnostics `Transport closed` |
+| 下一步授权 | 若后续进入 production release、gray、rollback、degradation、deployment config、migration、dependency 或 runtime 改动，必须另走 active docs / BACKLOG / release review 授权 |
+| C-049 到 C-054 | 仍为 Deferred / Open Question；本节不关闭相似度阈值、考察点绑定模型、失败折叠最终样式、错误枚举最终映射、刷新恢复最终状态机或下一题具体算法 |
+
+#### Step12 final boundary
+
+AIFI-REL-009 完成的是 release readiness documentation（发布就绪文档）收口，而不是 F8 / M8 full production release（完整生产发布）收口。`DELIVERY_PLAN.md` 中 F8 的总体发布状态仍必须由后续 release review、生产前质量门禁和用户确认决定。
 
 
 ## 6. F1.3 结论

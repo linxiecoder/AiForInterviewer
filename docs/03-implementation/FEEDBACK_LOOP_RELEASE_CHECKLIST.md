@@ -15,7 +15,7 @@ permalink: ai-for-interviewer/docs/03-implementation/feedback-loop-release-check
 
 | 项 | 结论 |
 |---|---|
-| 文档收口状态 | READY_FOR_REVIEW / PENDING_BACKLOG_CLOSEOUT |
+| 文档收口状态 | PASS_FOR_AIFI_REL_009_DOCS |
 | 生产发布状态 | NOT_READY_FOR_PRODUCTION_RELEASE |
 | 可继续动作 | 只允许后续人工或自动门禁基于本清单做 release review（发布审查） |
 | 不允许动作 | 不允许执行生产发布、灰度、回滚、降级、部署配置、迁移、依赖变更或 runtime（运行时）改动 |
@@ -42,7 +42,7 @@ permalink: ai-for-interviewer/docs/03-implementation/feedback-loop-release-check
 
 | Gate | 条件 | 当前结果 | 发布判断 |
 |---|---|---|---|
-| RG-01 active docs（当前有效文档） | AIFI-REL-009 已进入 BACKLOG；DOCS_INDEX 已登记新增 release docs（发布文档）；BACKLOG 当前仍为 `READY_TO_START`，等待后续状态 closeout（状态收口） | PENDING_BACKLOG_CLOSEOUT | 只允许进入审查，不自证任务完成 |
+| RG-01 active docs（当前有效文档） | AIFI-REL-009 已在 BACKLOG 登记为 `DONE / CLOSED`；DOCS_INDEX 已登记新增 release docs（发布文档）；REQUIREMENT_TRACEABILITY 已登记 Step12 final boundary（最终边界） | PASS | 允许 AIFI-REL-009 文档范围收口 |
 | RG-02 scope lock（范围锁） | `.omo/evidence/plan/step12-implementation-scope-lock.md` 为 `AUTHORIZED` | PASS | 允许写 release docs |
 | RG-03 forbidden surface（禁止面） | 无 `apps/**`、`tests/**`、migration、config、dependency、archive、`.omo/plans/**` tracked diff | PASS | 允许文档收口 |
 | RG-04 QA evidence（质量证据） | Step1 到 Step11 命令、结果和残余风险已归档 | PASS_WITH_RESIDUALS | 不足以批准生产发布 |
@@ -67,7 +67,7 @@ permalink: ai-for-interviewer/docs/03-implementation/feedback-loop-release-check
 
 | 决策项 | 结论 |
 |---|---|
-| AIFI-REL-009 文档收口 | READY_FOR_REVIEW / PENDING_BACKLOG_CLOSEOUT |
+| AIFI-REL-009 文档收口 | GO |
 | 生产发布 | NO-GO |
 | 灰度发布 | NO-GO |
 | 回滚执行 | NO-GO |
