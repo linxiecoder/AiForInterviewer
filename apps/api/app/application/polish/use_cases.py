@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import datetime
 from hashlib import sha256
 from typing import Any, Final
 
@@ -3603,10 +3604,14 @@ def _latest_session_detail_feedback_by_answer_id(
         current = latest_by_answer_id.get(feedback.answer_id)
         if (
             current is None
-            or (feedback.created_at, feedback.feedback_id) > (current.created_at, current.feedback_id)
+            or _session_detail_feedback_sort_key(feedback) > _session_detail_feedback_sort_key(current)
         ):
             latest_by_answer_id[feedback.answer_id] = feedback
     return latest_by_answer_id
+
+
+def _session_detail_feedback_sort_key(feedback: PolishFeedback) -> tuple[bool, datetime, str]:
+    return (_is_effective_feedback(feedback), feedback.created_at, feedback.feedback_id)
 
 
 def _is_session_detail_visible_feedback(feedback: PolishFeedback) -> bool:
@@ -3621,10 +3626,10 @@ def _is_session_detail_visible_feedback(feedback: PolishFeedback) -> bool:
         return False
     if payload_status not in SESSION_DETAIL_VISIBLE_FEEDBACK_PAYLOAD_STATUSES:
         return False
-    if feedback.status in SESSION_DETAIL_VISIBLE_FAILED_FEEDBACK_STATUSES:
-        return payload_status == feedback.status and feedback_text_from_payload(payload) is not None
     if feedback.status == "generated":
         return feedback_text_from_payload(payload) is not None
+    if feedback.status in SESSION_DETAIL_VISIBLE_FEEDBACK_PAYLOAD_STATUSES:
+        return payload_status == feedback.status and feedback_text_from_payload(payload) is not None
     return False
 
 
