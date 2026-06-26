@@ -1,0 +1,30 @@
+{
+  "step7_scope": {
+    "active_be": "AIFI-BE-013 (read-only dependency)",
+    "target_be": "AIFI-BE-014 (scope_lock_only target; no implementation authorized)",
+    "mode": "scope_lock_only",
+    "allowed_capabilities": [],
+    "forbidden_capabilities": [
+      "question_generation",
+      "adaptive_learning_path",
+      "next_question_recommendation",
+      "auto_tutoring",
+      "trend_autopilot"
+    ],
+    "dependency": {
+      "step2": "immutable",
+      "step3": "immutable",
+      "step4": "immutable",
+      "step5": "immutable",
+      "step6": "immutable"
+    }
+  },
+  "evidence": {
+    "read_inputs": [
+      "docs/01-product/REQUIREMENT_TRACEABILITY.md",
+      "docs/03-implementation/BACKLOG.md"
+    ],
+    "step5_commit_hash": "ef95d4a9139d4c0f41593a6c9c57897d533aca0b",
+    "step6_commit_hash": "1bfa1cea0d213e01c00f20fda33971b68fac7996"
+  }
+}
