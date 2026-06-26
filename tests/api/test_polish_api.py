@@ -176,6 +176,39 @@ def test_polish_feedback_payload_schema_keeps_structured_fields_optional() -> No
     assert "candidate_refs" not in payload
 
 
+def test_step8_feedback_payload_schema_exposes_policy_signed_contract_fields() -> None:
+    step8_fields = (
+        "policy_signed_next_action",
+        "follow_up_intent_classification",
+        "same_node_follow_up_contract",
+        "same_node_next_question_contract",
+        "next_question_response_contract",
+    )
+    for field_name in step8_fields:
+        assert field_name in PolishFeedbackPayload.model_fields
+        assert not PolishFeedbackPayload.model_fields[field_name].is_required()
+
+    payload = PolishFeedbackPayload.model_validate(
+        {
+            "feedback_text": "same-node contract feedback",
+            "policy_signed_next_action": {
+                "action_type": "continue_same_question",
+                "policy_signature": "policy_sig_step8",
+            },
+            "follow_up_intent_classification": {"intent": "same_node_follow_up"},
+            "same_node_follow_up_contract": {"contract_id": "same_node_follow_up.v1"},
+            "same_node_next_question_contract": {"contract_id": "same_node_next_question.v1"},
+            "next_question_response_contract": {"contract_id": "next_question_response.v1"},
+        }
+    ).model_dump(mode="json")
+
+    assert payload["policy_signed_next_action"]["policy_signature"] == "policy_sig_step8"
+    assert payload["follow_up_intent_classification"]["intent"] == "same_node_follow_up"
+    assert payload["same_node_follow_up_contract"]["contract_id"] == "same_node_follow_up.v1"
+    assert payload["same_node_next_question_contract"]["contract_id"] == "same_node_next_question.v1"
+    assert payload["next_question_response_contract"]["contract_id"] == "next_question_response.v1"
+
+
 def test_question_intent_request_schemas_forbid_execution_target_fields() -> None:
     for request_model in (CreateQuestionTaskRequest, CreateFeedbackNextQuestionIntentRequest):
         assert "selected_progress_node_ref" not in request_model.model_fields
@@ -494,6 +527,95 @@ def test_feedback_task_response_sanitizes_stored_sensitive_feedback_payload() ->
         "secret=plain-secret",
     ):
         assert forbidden_text not in serialized_values
+
+
+def test_step8_feedback_response_preserves_refs_and_policy_signed_contract_metadata() -> None:
+    from types import SimpleNamespace
+
+    from app.application.polish.entities import PolishTaskStatus
+    from app.domain.shared.refs import ResourceRef, TraceRef
+
+    now = utc_now()
+    task = PolishTaskStatus(
+        ai_task_id="task_step8_envelope",
+        task_type="polish_feedback_generation",
+        status="succeeded",
+        contract_ids=("P-POLISH-005",),
+        retryable=False,
+        result_ref=TraceRef(trace_ref_id="trc_step8_feedback", trace_type="feedback", created_at=now),
+        user_visible_status="反馈已生成",
+        score_type="polish_answer",
+        candidate_refs=(
+            ResourceRef(resource_type="question", resource_id="ques_step8"),
+            ResourceRef(resource_type="progress_node", resource_id="pnode_step8"),
+            ResourceRef(resource_type="evidence", resource_id="evidence_step8"),
+        ),
+        suggestion_refs=(
+            ResourceRef(resource_type="feedback_next_action", resource_id="same_node_follow_up"),
+        ),
+        validation_errors=("same_node_contract_metadata_missing",),
+    )
+    answer = SimpleNamespace(
+        answer_id="ans_step8_envelope",
+        answer_round=2,
+        feedback_id="trc_step8_feedback",
+        feedback_created_at=now,
+        score_result_id="score_step8",
+        feedback_payload={
+            "schema_id": "polish_feedback_generated_v1",
+            "schema_version": "1.0",
+            "status": "generated",
+            "contract_ids": ["P-POLISH-005"],
+            "feedback_id": "trc_step8_feedback",
+            "feedback_text": "same-node feedback remains readable",
+            "score_result": {"score_value": 82},
+            "loss_points": [{"loss_point_id": "loss_step8", "reason": "需要补充边界"}],
+            "policy_signed_next_action": {
+                "action_type": "continue_same_question",
+                "policy_signature": "policy_sig_step8",
+                "raw_prompt": "must_not_leak",
+            },
+            "follow_up_intent_classification": {"intent": "same_node_follow_up"},
+            "same_node_follow_up_contract": {"contract_id": "same_node_follow_up.v1"},
+            "same_node_next_question_contract": {"contract_id": "same_node_next_question.v1"},
+            "next_question_response_contract": {"contract_id": "next_question_response.v1"},
+            "candidate_refs": [{"resource_type": "weakness_candidate", "resource_id": "must_drop"}],
+            "provider_payload": {"completion": "must_not_leak"},
+        },
+    )
+
+    result = polish_api._feedback_response(
+        task,
+        answer,
+        session_id="psess_step8",
+        question_id="ques_step8",
+    )
+
+    assert result["candidate_refs"] == [
+        {"resource_type": "question", "resource_id": "ques_step8"},
+        {"resource_type": "progress_node", "resource_id": "pnode_step8"},
+        {"resource_type": "evidence", "resource_id": "evidence_step8"},
+    ]
+    assert result["suggestion_refs"] == [
+        {"resource_type": "feedback_next_action", "resource_id": "same_node_follow_up"}
+    ]
+    assert result["validation_errors"] == ["same_node_contract_metadata_missing"]
+    assert result["active_question_progress_node_ref"] == "pnode_step8"
+    assert result["active_question_evidence_refs"] == [
+        {"resource_type": "evidence", "resource_id": "evidence_step8"}
+    ]
+
+    response = PolishTaskStatusResponse.model_validate(result).model_dump(mode="json")
+    feedback_payload = response["feedback_payload"]
+    assert feedback_payload["policy_signed_next_action"]["policy_signature"] == "policy_sig_step8"
+    assert feedback_payload["follow_up_intent_classification"]["intent"] == "same_node_follow_up"
+    assert feedback_payload["same_node_follow_up_contract"]["contract_id"] == "same_node_follow_up.v1"
+    assert feedback_payload["same_node_next_question_contract"]["contract_id"] == "same_node_next_question.v1"
+    assert feedback_payload["next_question_response_contract"]["contract_id"] == "next_question_response.v1"
+    assert "candidate_refs" not in feedback_payload
+    assert "provider_payload" not in feedback_payload
+    assert "raw_prompt" not in _collect_keys(response)
+    assert "completion" not in _collect_keys(response)
 
 
 def test_pending_feedback_payload_remains_safe_when_no_feedback_exists() -> None:

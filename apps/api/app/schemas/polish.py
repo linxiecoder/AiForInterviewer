@@ -322,6 +322,11 @@ class PolishFeedbackPayload(BaseModel):
     weight_explanation: str | None = None
     interview_intent: str | None = None
     feedback_metadata: PolishContextHygieneMetadataResponse | None = None
+    policy_signed_next_action: dict[str, Any] | None = None
+    follow_up_intent_classification: dict[str, Any] | None = None
+    same_node_follow_up_contract: dict[str, Any] | None = None
+    same_node_next_question_contract: dict[str, Any] | None = None
+    next_question_response_contract: dict[str, Any] | None = None
     weakness_candidates: list[dict[str, Any]] | None = None
     asset_candidates: list[dict[str, Any]] | None = None
     oral_script_candidates: list[dict[str, Any]] | None = None

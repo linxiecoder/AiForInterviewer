@@ -33,6 +33,11 @@ FEEDBACK_PAYLOAD_RESPONSE_TOP_LEVEL_KEYS: Final = frozenset(POLISH_FEEDBACK_FINA
         "retryable",
         "user_visible_status",
         "validation_errors",
+        "policy_signed_next_action",
+        "follow_up_intent_classification",
+        "same_node_follow_up_contract",
+        "same_node_next_question_contract",
+        "next_question_response_contract",
     }
 )
 

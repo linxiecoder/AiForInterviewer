@@ -180,6 +180,21 @@ def test_feedback_contract_final_validator_maps_business_invalid_to_contract_fai
     assert "answer_coverage_fields_invalid" in result.failure_reasons
 
 
+def test_feedback_contract_keeps_step8_response_metadata_optional() -> None:
+    payload = _feedback_final()
+
+    result = POLISH_FEEDBACK_TASK_CONTRACT.validate_final_payload(payload)
+
+    forbidden_required_reasons = {
+        "policy_signed_next_action_required",
+        "follow_up_intent_classification_required",
+        "same_node_follow_up_contract_required",
+        "same_node_next_question_contract_required",
+        "next_question_response_contract_required",
+    }
+    assert not (set(result.failure_reasons) & forbidden_required_reasons)
+
+
 def test_sanitized_replay_fixture_lane_accepts_sanitized_question_fixture() -> None:
     fixture = json.loads(
         (
