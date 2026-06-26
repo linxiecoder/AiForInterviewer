@@ -324,6 +324,44 @@ def normalize_question_metadata(raw: object) -> dict[str, Any]:
             }
         )
 
+    step7_contract_keys = {
+        "policy_signed_next_action",
+        "follow_up_intent_classification",
+        "same_node_follow_up_contract",
+        "same_node_next_question_contract",
+        "next_question_response_contract",
+    }
+    if any(key in payload for key in step7_contract_keys):
+        normalized.update(
+            {
+                "policy_signed_next_action": _safe_json_dict(
+                    payload.get("policy_signed_next_action"),
+                    max_items=24,
+                    max_depth=4,
+                ),
+                "follow_up_intent_classification": _safe_json_dict(
+                    payload.get("follow_up_intent_classification"),
+                    max_items=24,
+                    max_depth=4,
+                ),
+                "same_node_follow_up_contract": _safe_json_dict(
+                    payload.get("same_node_follow_up_contract"),
+                    max_items=32,
+                    max_depth=4,
+                ),
+                "same_node_next_question_contract": _safe_json_dict(
+                    payload.get("same_node_next_question_contract"),
+                    max_items=32,
+                    max_depth=4,
+                ),
+                "next_question_response_contract": _safe_json_dict(
+                    payload.get("next_question_response_contract"),
+                    max_items=32,
+                    max_depth=4,
+                ),
+            }
+        )
+
     prompt_keys = {
         "prompt_asset_version",
         "prompt_schema_id",

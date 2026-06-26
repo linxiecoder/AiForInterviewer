@@ -27,12 +27,17 @@ from app.application.polish.progress_prompts import (
     build_progress_quality_first_menu_prompt,
     build_progress_tree_state_refresh_prompt,
 )
+from app.application.polish.commands import CreatePolishQuestionTaskCommand
 from app.application.polish.entities import PolishFeedback, PolishQuestion, PolishQuestionSource
 from app.application.polish.feedback_schema import POLISH_FEEDBACK_CANDIDATE_PAYLOAD_FIELDS
 from app.application.polish.next_question_authorization import (
     NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID,
 )
 from app.application.polish.question_metadata import empty_question_metadata
+from app.application.polish.use_cases import (
+    QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+    _feedback_next_question_trusted_metadata_error,
+)
 from app.application.polish.session_continuity import SessionContinuitySnapshot, compute_session_continuity
 from app.application.polish.progress_tree import PolishProgressTreeLlmService
 from app.application.polish.theme_strategy import resolve_polish_theme_strategy
@@ -4221,6 +4226,122 @@ def test_polish_feedback_next_question_intent_writes_execution_grant_snapshot_me
     assert next_metadata["authorized_feedback_id"] == flow["feedback_id"]
     assert next_metadata["authorized_answer_id"] == flow["answer_id"]
     assert next_metadata["authorized_parent_question_id"] == flow["question_id"]
+
+
+def test_polish_feedback_next_question_intent_writes_policy_signed_same_node_contract() -> None:
+    session_factory = _session_factory()
+    binding_id = _seed_polish_sources(session_factory, OWNER_A)
+    app = _isolated_polish_app(
+        session_factory,
+        ACTOR_A,
+        llm_transport=_FeedbackIntentAllowedTransport(),
+    )
+    flow = _create_polish_answer_with_feedback(app, session_factory, binding_id)
+
+    status_code, body = call_json(
+        app,
+        f"/api/v1/polish-sessions/{flow['session_id']}/feedback/{flow['feedback_id']}/next-question",
+        "POST",
+        json_body={},
+    )
+
+    assert status_code == 202, body.get("error", {}).get("details", body)
+    next_question_id = body["data"]["result_ref"]["trace_ref_id"]
+    _, detail_body = call_json(app, f"/api/v1/polish-sessions/{flow['session_id']}")
+    turns = {turn["question_id"]: turn for turn in detail_body["data"]["turns"]}
+    next_metadata = turns[next_question_id]["question_metadata"]
+
+    contract = next_metadata["same_node_next_question_contract"]
+    assert contract["contract_id"] == "polish.step7.same_node_next_question.v1"
+    assert contract["policy_signature"] == next_metadata["policy_signed_next_action"]["policy_signature"]
+    assert contract["parent_question_id"] == flow["question_id"]
+    assert contract["parent_answer_id"] == flow["answer_id"]
+    assert contract["parent_feedback_id"] == flow["feedback_id"]
+    assert contract["selected_progress_node_ref"] == flow["progress_node_ref"]
+    assert contract["allowed_progress_node_refs"] == [flow["progress_node_ref"]]
+
+    follow_up_contract = next_metadata["same_node_follow_up_contract"]
+    assert follow_up_contract["contract_id"] == "polish.step7.same_node_follow_up.v1"
+    assert follow_up_contract["policy_signature"] == contract["policy_signature"]
+    assert follow_up_contract["parent_question_id"] == flow["question_id"]
+    assert follow_up_contract["parent_answer_id"] == flow["answer_id"]
+    assert follow_up_contract["parent_feedback_id"] == flow["feedback_id"]
+    assert follow_up_contract["selected_progress_node_ref"] == flow["progress_node_ref"]
+
+    response_contract = next_metadata["next_question_response_contract"]
+    assert response_contract["contract_id"] == "polish.step7.next_question_response.v1"
+    assert response_contract["policy_signature"] == contract["policy_signature"]
+    assert response_contract["api_resource_type"] == "ai_task"
+    assert response_contract["api_status"] == "accepted"
+    assert response_contract["result_ref_resource_type"] == "question"
+    assert response_contract["metadata_source"] == "question_metadata"
+    assert response_contract["requires_consumed_grant"] is True
+
+    classification = next_metadata["follow_up_intent_classification"]
+    assert classification["intent"] == "same_node_next_question"
+    assert classification["scope"] == "same_node"
+    assert classification["source"] == "feedback_next_question_intent"
+    assert classification["policy_signature"] == contract["policy_signature"]
+
+    policy = next_metadata["policy_signed_next_action"]
+    assert policy["action"] == "next_question"
+    assert policy["source"] == "feedback_payload.next_recommended_actions"
+    assert policy["requires_consumed_grant"] is True
+    assert policy["grant_lifecycle_state"] == "consumed"
+
+
+def test_polish_feedback_next_question_trusted_metadata_rejects_missing_policy_signature() -> None:
+    command = CreatePolishQuestionTaskCommand(
+        owner_id=OWNER_A,
+        actor_id=ACTOR_A.actor_id,
+        session_id="sess_policy_signature_gate",
+        execution_source=QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+        authorized_feedback_id="fb_policy_signature_gate",
+        authorized_answer_id="ans_policy_signature_gate",
+        authorized_parent_question_id="que_policy_signature_gate",
+        selected_progress_node_ref="progress_policy_signature_gate",
+    )
+    metadata = {
+        "next_question_execution_grant": {
+            "schema_id": NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID,
+            "schema_version": "1",
+            "grant_id": "nqg_policy_signature_gate",
+            "session_id": "sess_policy_signature_gate",
+            "feedback_id": "fb_policy_signature_gate",
+            "answer_id": "ans_policy_signature_gate",
+            "parent_question_id": "que_policy_signature_gate",
+            "selected_progress_node_ref": "progress_policy_signature_gate",
+            "allowed_progress_node_refs": ["progress_policy_signature_gate"],
+            "freshness_marker": "fb_policy_signature_gate:generated:2026-01-01T00:00:00+00:00",
+            "reason_codes": ["feedback_next_question_intent"],
+            "issued_at": "2026-01-01T00:00:00+00:00",
+            "expires_at": "2026-01-01T00:05:00+00:00",
+            "consumed_at": "2026-01-01T00:00:01+00:00",
+            "lifecycle_state": "consumed",
+        },
+        "policy_signed_next_action": {
+            "action": "next_question",
+            "source": "feedback_payload.next_recommended_actions",
+            "requires_consumed_grant": True,
+            "grant_lifecycle_state": "consumed",
+        },
+        "same_node_follow_up_contract": {
+            "contract_id": "polish.step7.same_node_follow_up.v1",
+        },
+        "same_node_next_question_contract": {
+            "contract_id": "polish.step7.same_node_next_question.v1",
+        },
+        "next_question_response_contract": {
+            "contract_id": "polish.step7.next_question_response.v1",
+        },
+    }
+
+    error = _feedback_next_question_trusted_metadata_error(command, metadata)
+
+    assert error is not None
+    assert error.code == "validation_failed"
+    assert error.details["reason"] == "policy_signature_required"
+    assert error.details["field"] == "policy_signed_next_action.policy_signature"
 
 
 def test_polish_feedback_next_question_intent_rejects_payload_tamper() -> None:

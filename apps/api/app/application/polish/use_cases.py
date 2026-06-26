@@ -157,6 +157,10 @@ QUESTION_GENERATION_MODES = {
 QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT = "feedback_next_question_intent"
 QUESTION_EXECUTION_AUTHORITY_SOURCE = "backend_question_execution_authority"
 QUESTION_EXECUTION_AUTHORITY_DECISION_REF_PREFIX = "qauth"
+STEP7_SAME_NODE_FOLLOW_UP_CONTRACT_ID = "polish.step7.same_node_follow_up.v1"
+STEP7_SAME_NODE_NEXT_QUESTION_CONTRACT_ID = "polish.step7.same_node_next_question.v1"
+STEP7_NEXT_QUESTION_RESPONSE_CONTRACT_ID = "polish.step7.next_question_response.v1"
+STEP7_POLICY_SIGNED_NEXT_ACTION_SOURCE = "feedback_payload.next_recommended_actions"
 
 POLISH_USE_CASE_SPLIT_LANDING_MAP = {
     "session_lifecycle": "app.application.polish.session_application_service.PolishSessionApplicationService",
@@ -2393,12 +2397,67 @@ def _feedback_next_question_trusted_metadata_error(
         selected_progress_node_ref=command.selected_progress_node_ref,
     )
     if result.is_valid:
+        policy_error = _feedback_next_question_policy_contract_error(safe_metadata)
+        if policy_error is not None:
+            return policy_error
         return None
     return DomainError(
         code="validation_failed",
         message="Feedback next-question trusted output is missing consumed grant snapshot",
         details={"reason": result.reason, **result.details},
     )
+
+
+def _feedback_next_question_policy_contract_error(metadata: dict[str, Any]) -> DomainError | None:
+    policy = metadata.get("policy_signed_next_action") if isinstance(metadata.get("policy_signed_next_action"), dict) else {}
+    policy_signature = _clean_question_request_text(policy.get("policy_signature"))
+    if policy_signature is None:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback next-question trusted output is missing policy signature",
+            details={
+                "reason": "policy_signature_required",
+                "field": "policy_signed_next_action.policy_signature",
+            },
+        )
+    if policy.get("requires_consumed_grant") is not True:
+        return DomainError(
+            code="validation_failed",
+            message="Feedback next-question trusted output must require consumed grant",
+            details={
+                "reason": "consumed_grant_required",
+                "field": "policy_signed_next_action.requires_consumed_grant",
+            },
+        )
+    if _clean_question_request_text(policy.get("grant_lifecycle_state")) != "consumed":
+        return DomainError(
+            code="validation_failed",
+            message="Feedback next-question trusted output must use a consumed grant",
+            details={
+                "reason": "consumed_grant_required",
+                "field": "policy_signed_next_action.grant_lifecycle_state",
+            },
+        )
+
+    for contract_key, contract_id in (
+        ("same_node_follow_up_contract", STEP7_SAME_NODE_FOLLOW_UP_CONTRACT_ID),
+        ("same_node_next_question_contract", STEP7_SAME_NODE_NEXT_QUESTION_CONTRACT_ID),
+        ("next_question_response_contract", STEP7_NEXT_QUESTION_RESPONSE_CONTRACT_ID),
+    ):
+        contract = metadata.get(contract_key) if isinstance(metadata.get(contract_key), dict) else {}
+        if _clean_question_request_text(contract.get("contract_id")) != contract_id:
+            return DomainError(
+                code="validation_failed",
+                message="Feedback next-question trusted output has invalid contract",
+                details={"reason": "contract_id_mismatch", "field": f"{contract_key}.contract_id"},
+            )
+        if _clean_question_request_text(contract.get("policy_signature")) != policy_signature:
+            return DomainError(
+                code="validation_failed",
+                message="Feedback next-question trusted output has unsigned contract",
+                details={"reason": "policy_signature_mismatch", "field": f"{contract_key}.policy_signature"},
+            )
+    return None
 
 
 def _feedback_next_question_selected_progress_node_ref(
@@ -3077,12 +3136,117 @@ def _question_generation_request_metadata(
         "exclude_question_refs": list(_clean_question_request_list(command.exclude_question_refs)),
         "completed_focus_refs": list(_clean_question_request_list(command.completed_focus_refs)),
     }
+    grant_metadata = next_question_execution_grant_snapshot_to_metadata(
+        command.next_question_execution_grant_snapshot
+    )
+    metadata.update(grant_metadata)
+    grant_snapshot = grant_metadata.get("next_question_execution_grant")
     metadata.update(
-        next_question_execution_grant_snapshot_to_metadata(
-            command.next_question_execution_grant_snapshot
+        _feedback_next_question_contract_metadata(
+            command,
+            selected_progress_node_ref=selected_progress_node_ref,
+            grant_snapshot=grant_snapshot if isinstance(grant_snapshot, dict) else None,
         )
     )
     return metadata
+
+
+def _feedback_next_question_contract_metadata(
+    command: CreatePolishQuestionTaskCommand,
+    *,
+    selected_progress_node_ref: str | None,
+    grant_snapshot: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if command.execution_source != QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT:
+        return {}
+
+    feedback_id = _clean_question_request_text(command.authorized_feedback_id)
+    answer_id = _clean_question_request_text(command.authorized_answer_id)
+    parent_question_id = _clean_question_request_text(command.authorized_parent_question_id)
+    progress_node_ref = _clean_question_request_text(selected_progress_node_ref)
+    if (
+        feedback_id is None
+        or answer_id is None
+        or parent_question_id is None
+        or progress_node_ref is None
+    ):
+        return {}
+
+    raw_allowed_refs = (
+        grant_snapshot.get("allowed_progress_node_refs")
+        if grant_snapshot is not None
+        else None
+    )
+    allowed_progress_node_refs = (
+        _clean_question_request_list([item for item in raw_allowed_refs if isinstance(item, str)])
+        if isinstance(raw_allowed_refs, list)
+        else (progress_node_ref,)
+    )
+    if not allowed_progress_node_refs:
+        allowed_progress_node_refs = (progress_node_ref,)
+
+    grant_id = (
+        _clean_question_request_text(grant_snapshot.get("grant_id"))
+        if grant_snapshot is not None
+        else None
+    )
+    grant_lifecycle_state = (
+        _clean_question_request_text(grant_snapshot.get("lifecycle_state"))
+        if grant_snapshot is not None
+        else None
+    )
+    signature_seed = "|".join(
+        (
+            QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+            command.session_id,
+            feedback_id,
+            answer_id,
+            parent_question_id,
+            progress_node_ref,
+            grant_id or "",
+        )
+    )
+    policy_signature = f"step7_nq_{sha256(signature_seed.encode('utf-8')).hexdigest()[:16]}"
+    common_contract = {
+        "policy_signature": policy_signature,
+        "parent_question_id": parent_question_id,
+        "parent_answer_id": answer_id,
+        "parent_feedback_id": feedback_id,
+        "selected_progress_node_ref": progress_node_ref,
+        "allowed_progress_node_refs": list(allowed_progress_node_refs),
+    }
+    return {
+        "policy_signed_next_action": {
+            "policy_signature": policy_signature,
+            "action": "next_question",
+            "source": STEP7_POLICY_SIGNED_NEXT_ACTION_SOURCE,
+            "requires_consumed_grant": True,
+            "grant_lifecycle_state": grant_lifecycle_state,
+        },
+        "follow_up_intent_classification": {
+            "intent": "same_node_next_question",
+            "scope": "same_node",
+            "source": QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+            "policy_signature": policy_signature,
+        },
+        "same_node_follow_up_contract": {
+            "contract_id": STEP7_SAME_NODE_FOLLOW_UP_CONTRACT_ID,
+            **common_contract,
+        },
+        "same_node_next_question_contract": {
+            "contract_id": STEP7_SAME_NODE_NEXT_QUESTION_CONTRACT_ID,
+            **common_contract,
+        },
+        "next_question_response_contract": {
+            "contract_id": STEP7_NEXT_QUESTION_RESPONSE_CONTRACT_ID,
+            **common_contract,
+            "api_resource_type": "ai_task",
+            "api_status": "accepted",
+            "result_ref_resource_type": "question",
+            "metadata_source": "question_metadata",
+            "requires_consumed_grant": True,
+        },
+    }
 
 
 def _question_candidate_payload_with_request_metadata(
