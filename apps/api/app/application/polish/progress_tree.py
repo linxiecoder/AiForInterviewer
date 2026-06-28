@@ -84,6 +84,41 @@ _DISPLAY_CATEGORY_TITLES = {
     _JD_GAP_LEARNING: "补齐学习类",
 }
 _ALLOWED_CATEGORIES = set(_DISPLAY_CATEGORY_TITLES)
+
+
+def _quality_first_category_alias_key(value: object) -> str:
+    return "".join(ch.lower() for ch in str(value or "").strip() if ch.isalnum())
+
+
+_QUALITY_FIRST_CATEGORY_ALIASES = {
+    _RESUME_DEEP_DIVE: (
+        _RESUME_DEEP_DIVE,
+        "resume deep dive",
+        "project_deep_dive",
+        "project deep dive",
+        "深度打磨",
+        "深度打磨类",
+        "简历深挖",
+        "项目深挖",
+        "项目经历深挖",
+    ),
+    _JD_GAP_LEARNING: (
+        _JD_GAP_LEARNING,
+        "jd gap learning",
+        "job_gap_learning",
+        "job gap learning",
+        "补齐学习",
+        "补齐学习类",
+        "岗位补齐",
+        "岗位缺口",
+        "岗位缺口核验",
+    ),
+}
+_QUALITY_FIRST_CATEGORY_ALIAS_LOOKUP = {
+    _quality_first_category_alias_key(alias): category
+    for category, aliases in _QUALITY_FIRST_CATEGORY_ALIASES.items()
+    for alias in aliases
+}
 _ALLOWED_BASIS_TYPES = {"resume_signal", "jd_requirement", "match_gap", "mixed"}
 _QUALITY_FIRST_MAX_PRIMARY_NODES = 9
 _QUALITY_FIRST_LOW_NODE_COUNT = 4
@@ -124,6 +159,17 @@ _QUALITY_FIRST_COST_NODE_TERMS = (
     "预算治理",
     "FinOps",
 )
+
+
+def _quality_first_category_from_payload(category_payload: dict[str, Any]) -> tuple[str, bool]:
+    raw_category = str(category_payload.get("category") or "").strip()
+    for field in ("category", "display_category_title", "category_title", "title"):
+        category = _QUALITY_FIRST_CATEGORY_ALIAS_LOOKUP.get(
+            _quality_first_category_alias_key(category_payload.get(field))
+        )
+        if category:
+            return category, category != raw_category
+    return raw_category, False
 
 _ALLOWED_CONFIDENCE_LEVELS = {"high", "medium", "low"}
 _ABSTRACT_TITLE_FRAGMENTS = {
@@ -461,10 +507,12 @@ def _quality_first_menu_payload_envelope(
         if not isinstance(category_payload, dict):
             low_confidence_flags.append("quality_first_category_invalid")
             continue
-        category = str(category_payload.get("category") or "").strip()
+        category, category_alias_normalized = _quality_first_category_from_payload(category_payload)
         if category not in _ALLOWED_CATEGORIES:
             low_confidence_flags.append("quality_first_category_unknown")
             continue
+        if category_alias_normalized:
+            low_confidence_flags.append("quality_first_category_alias_normalized")
         valid_category_seen = True
         display_category_title = _DISPLAY_CATEGORY_TITLES[category]
         raw_nodes = category_payload.get("nodes")
@@ -1500,12 +1548,12 @@ def _quality_first_payload_failure_reason(payload: dict[str, Any]) -> str:
     valid_categories = [
         item
         for item in categories
-        if isinstance(item, dict) and str(item.get("category") or "").strip() in _ALLOWED_CATEGORIES
+        if isinstance(item, dict) and _quality_first_category_from_payload(item)[0] in _ALLOWED_CATEGORIES
     ]
     if not valid_categories:
         return "quality_first_schema_invalid"
 
-    present_categories = {str(item.get("category") or "").strip() for item in valid_categories}
+    present_categories = {_quality_first_category_from_payload(item)[0] for item in valid_categories}
     if not {_RESUME_DEEP_DIVE, _JD_GAP_LEARNING}.issubset(present_categories):
         return "quality_first_category_missing"
 
@@ -1559,7 +1607,7 @@ def _quality_first_validation_errors(payload: dict[str, Any], *, reason: str) ->
                 }
             )
             continue
-        category = str(item.get("category") or "").strip()
+        category, _category_alias_normalized = _quality_first_category_from_payload(item)
         if category not in _ALLOWED_CATEGORIES:
             errors.append(
                 {
