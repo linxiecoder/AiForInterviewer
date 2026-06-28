@@ -13,6 +13,11 @@ Thumbs.db
 !.claude/skills/
 !.claude/skills/**
 
+# Local skill sync artifacts; tracked skills remain tracked.
+.agents/skills/*
+.claude/skills/*
+skills-lock.json
+
 # Claude Flow generated runtime artifacts and generic external packs
 .claude-flow/
 .swarm/
