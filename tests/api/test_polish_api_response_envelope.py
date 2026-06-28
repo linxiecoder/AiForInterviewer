@@ -69,5 +69,8 @@ def test_step8_feedback_response_envelope_preserves_refs_and_contract_metadata()
         {"resource_type": "feedback_next_action", "resource_id": "same_node_follow_up"}
     ]
     assert response["validation_errors"] == ["same_node_contract_metadata_missing"]
-    assert response["feedback_payload"]["policy_signed_next_action"]["policy_signature"] == "policy_sig_step8"
+    policy = response["feedback_payload"]["policy_signed_next_action"]
+    assert policy["action_type"] == "continue_same_question"
+    assert policy["policy_signature"] == "policy_sig_step8"
+    assert "action" not in policy
     assert response["feedback_payload"]["same_node_follow_up_contract"]["contract_id"] == "same_node_follow_up.v1"

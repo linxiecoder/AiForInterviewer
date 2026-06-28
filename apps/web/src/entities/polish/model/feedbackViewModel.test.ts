@@ -79,6 +79,47 @@ expectExcludes(
   "provider payload and raw prompt are hidden",
 );
 
+const step7Payload: PolishFeedbackPayload = {
+  status: "generated",
+  feedback_text: "step7 next question metadata",
+  policy_signed_next_action: {
+    action_type: "next_question",
+    policy_signature: "step7_policy_sig",
+    source: "feedback_payload.next_recommended_actions",
+    requires_consumed_grant: true,
+    grant_lifecycle_state: "consumed",
+  },
+  same_node_follow_up_contract: {
+    contract_id: "polish.step7.same_node_follow_up.v1",
+    policy_signature: "step7_policy_sig",
+  },
+  same_node_next_question_contract: {
+    contract_id: "polish.step7.same_node_next_question.v1",
+    policy_signature: "step7_policy_sig",
+  },
+  next_question_response_contract: {
+    contract_id: "polish.step7.next_question_response.v1",
+    policy_signature: "step7_policy_sig",
+  },
+};
+const step7ContractView = buildFeedbackResponseContractViewModel(buildAnswer(step7Payload));
+expectEqual(step7ContractView.policySignedNextAction.isTrusted, true, "step7 signed next action is trusted");
+expectEqual(step7ContractView.policySignedNextAction.action, "next_question", "step7 signed action type");
+expectEqual(step7ContractView.policySignedNextAction.label, "next_question", "step7 signed action fallback label");
+
+const unsignedStep7ContractView = buildFeedbackResponseContractViewModel(buildAnswer({
+  ...step7Payload,
+  policy_signed_next_action: {
+    action_type: "next_question",
+    source: "feedback_payload.next_recommended_actions",
+    requires_consumed_grant: true,
+    grant_lifecycle_state: "consumed",
+  },
+}));
+expectEqual(unsignedStep7ContractView.policySignedNextAction.isTrusted, false, "unsigned step7 action is untrusted");
+expectEqual(unsignedStep7ContractView.policySignedNextAction.action, null, "unsigned step7 action is empty");
+expectEqual(unsignedStep7ContractView.policySignedNextAction.label, null, "unsigned step7 label is empty");
+
 const failedContractView = buildFeedbackResponseContractViewModel(buildAnswer({
   status: "validation_failed",
   retryable: true,

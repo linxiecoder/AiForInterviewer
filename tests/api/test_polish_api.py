@@ -4570,7 +4570,8 @@ def test_polish_feedback_next_question_intent_writes_policy_signed_same_node_con
     assert classification["policy_signature"] == contract["policy_signature"]
 
     policy = next_metadata["policy_signed_next_action"]
-    assert policy["action"] == "next_question"
+    assert policy["action_type"] == "next_question"
+    assert "action" not in policy
     assert policy["source"] == "feedback_payload.next_recommended_actions"
     assert policy["requires_consumed_grant"] is True
     assert policy["grant_lifecycle_state"] == "consumed"
@@ -4606,7 +4607,7 @@ def test_polish_feedback_next_question_trusted_metadata_rejects_missing_policy_s
             "lifecycle_state": "consumed",
         },
         "policy_signed_next_action": {
-            "action": "next_question",
+            "action_type": "next_question",
             "source": "feedback_payload.next_recommended_actions",
             "requires_consumed_grant": True,
             "grant_lifecycle_state": "consumed",
@@ -4628,6 +4629,64 @@ def test_polish_feedback_next_question_trusted_metadata_rejects_missing_policy_s
     assert error.code == "validation_failed"
     assert error.details["reason"] == "policy_signature_required"
     assert error.details["field"] == "policy_signed_next_action.policy_signature"
+
+
+def test_polish_feedback_next_question_trusted_metadata_rejects_legacy_action_without_action_type() -> None:
+    command = CreatePolishQuestionTaskCommand(
+        owner_id=OWNER_A,
+        actor_id=ACTOR_A.actor_id,
+        session_id="sess_legacy_action_gate",
+        execution_source=QUESTION_EXECUTION_SOURCE_FEEDBACK_NEXT_QUESTION_INTENT,
+        authorized_feedback_id="fb_legacy_action_gate",
+        authorized_answer_id="ans_legacy_action_gate",
+        authorized_parent_question_id="que_legacy_action_gate",
+        selected_progress_node_ref="progress_legacy_action_gate",
+    )
+    metadata = {
+        "next_question_execution_grant": {
+            "schema_id": NEXT_QUESTION_EXECUTION_GRANT_SNAPSHOT_SCHEMA_ID,
+            "schema_version": "1",
+            "grant_id": "nqg_legacy_action_gate",
+            "session_id": "sess_legacy_action_gate",
+            "feedback_id": "fb_legacy_action_gate",
+            "answer_id": "ans_legacy_action_gate",
+            "parent_question_id": "que_legacy_action_gate",
+            "selected_progress_node_ref": "progress_legacy_action_gate",
+            "allowed_progress_node_refs": ["progress_legacy_action_gate"],
+            "freshness_marker": "fb_legacy_action_gate:generated:2026-01-01T00:00:00+00:00",
+            "reason_codes": ["feedback_next_question_intent"],
+            "issued_at": "2026-01-01T00:00:00+00:00",
+            "expires_at": "2026-01-01T00:05:00+00:00",
+            "consumed_at": "2026-01-01T00:00:01+00:00",
+            "lifecycle_state": "consumed",
+        },
+        "policy_signed_next_action": {
+            "policy_signature": "policy_sig_legacy_action_gate",
+            "action": "next_question",
+            "source": "feedback_payload.next_recommended_actions",
+            "requires_consumed_grant": True,
+            "grant_lifecycle_state": "consumed",
+        },
+        "same_node_follow_up_contract": {
+            "contract_id": "polish.step7.same_node_follow_up.v1",
+            "policy_signature": "policy_sig_legacy_action_gate",
+        },
+        "same_node_next_question_contract": {
+            "contract_id": "polish.step7.same_node_next_question.v1",
+            "policy_signature": "policy_sig_legacy_action_gate",
+        },
+        "next_question_response_contract": {
+            "contract_id": "polish.step7.next_question_response.v1",
+            "policy_signature": "policy_sig_legacy_action_gate",
+        },
+    }
+
+    error = _feedback_next_question_trusted_metadata_error(command, metadata)
+
+    assert error is not None
+    assert error.code == "validation_failed"
+    assert error.details["reason"] == "action_type_required"
+    assert error.details["field"] == "policy_signed_next_action.action_type"
 
 
 def test_polish_feedback_next_question_intent_rejects_payload_tamper() -> None:

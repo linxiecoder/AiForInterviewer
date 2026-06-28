@@ -2431,6 +2431,15 @@ def _feedback_next_question_policy_contract_error(metadata: dict[str, Any]) -> D
                 "field": "policy_signed_next_action.policy_signature",
             },
         )
+    if _clean_question_request_text(policy.get("action_type")) != "next_question":
+        return DomainError(
+            code="validation_failed",
+            message="Feedback next-question trusted output has invalid action type",
+            details={
+                "reason": "action_type_required",
+                "field": "policy_signed_next_action.action_type",
+            },
+        )
     if policy.get("requires_consumed_grant") is not True:
         return DomainError(
             code="validation_failed",
@@ -3229,7 +3238,7 @@ def _feedback_next_question_contract_metadata(
     return {
         "policy_signed_next_action": {
             "policy_signature": policy_signature,
-            "action": "next_question",
+            "action_type": "next_question",
             "source": STEP7_POLICY_SIGNED_NEXT_ACTION_SOURCE,
             "requires_consumed_grant": True,
             "grant_lifecycle_state": grant_lifecycle_state,
